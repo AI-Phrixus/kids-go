@@ -16,6 +16,7 @@ import { EyeCareClock } from "./eyecare";
 import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
 import { mascotSvg } from "./mascot";
 import { setSfxEnabled, sfx, sfxEnabled } from "./sfx";
+import { checkTyping, pickPracticePhrase, targetHtml } from "./typing";
 
 type Route = "welcome" | "map" | "lesson" | "free" | "settings" | "parent" | "privacy" | "help";
 type FreeMode = "casual" | "race5" | "race10";
@@ -56,6 +57,10 @@ let chatMsgs: { id: string; fromMe: boolean; body: string; at: number }[] = [];
 let chatSince = 0;
 let chatPollTimer: number | null = null;
 let friendsStatus = "";
+/** Chat compose: practice = must match target phrase; free = any short message */
+let typePractice = localStorage.getItem("kids-go-type") !== "0";
+let typeTarget = "";
+let typeWins = Number(localStorage.getItem("kids-go-type-wins") || "0") || 0;
 
 const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20, dailyCapMin: 60 });
 clock.onBreak = () => showBreak(true);
@@ -159,7 +164,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.7.0 · <span id="mins">0</span> min · free AI rotate
+      v0.7.1 · <span id="mins">0</span> min · free AI rotate
       · <a href="#" id="help-link">${t(locale, "help")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
@@ -1164,18 +1169,40 @@ async function paintFriendsPanel() {
           .join("");
         body = `<p class="muted">${t(locale, "friends_pick")}</p><div class="row">${picks || "—"}</div>`;
       } else {
+        if (!typeTarget) typeTarget = pickPracticePhrase(locale);
         const bubbles = chatMsgs
           .map(
             (m) =>
               `<div class="chat-bubble ${m.fromMe ? "me" : "them"}">${escapeHtml(m.body)}</div>`,
           )
           .join("");
+        const practiceBar = typePractice
+          ? `<div class="type-box">
+              <div class="row between">
+                <span class="muted">${t(locale, "type_target")}</span>
+                <button type="button" id="ftype-next">${t(locale, "type_next")}</button>
+              </div>
+              <p class="type-hint muted">${t(locale, "type_hint")}</p>
+              <div class="type-target" id="ftype-target" aria-live="polite">${targetHtml(typeTarget, "")}</div>
+              <div class="row type-meta">
+                <span id="ftype-acc" class="type-acc">${t(locale, "type_accuracy", { n: 0 })}</span>
+                <span class="muted">${t(locale, "type_stats", { n: typeWins })}</span>
+              </div>
+              <p id="ftype-tip" class="type-tip muted" role="status"></p>
+            </div>`
+          : "";
         body = `
           <p><strong>💬 ${escapeHtml(chatNick)}</strong></p>
+          <div class="row type-mode">
+            <button type="button" id="mode-practice" class="${typePractice ? "primary" : ""}">${t(locale, "type_practice")}</button>
+            <button type="button" id="mode-free" class="${!typePractice ? "primary" : ""}">${t(locale, "type_free")}</button>
+          </div>
+          ${practiceBar}
           <div class="chat-log" id="chat-log">${bubbles || `<p class="muted">…</p>`}</div>
           <div class="row chat-compose">
-            <input id="fmsg" maxlength="80" placeholder="${escapeHtml(t(locale, "friends_msg_placeholder"))}" />
-            <button class="primary" id="fsend">${t(locale, "friends_send")}</button>
+            <input id="fmsg" maxlength="80" autocomplete="off" autocapitalize="off" spellcheck="true"
+              placeholder="${escapeHtml(typePractice ? typeTarget : t(locale, "friends_msg_placeholder"))}" />
+            <button class="primary" id="fsend" ${typePractice ? "disabled" : ""}>${t(locale, "friends_send")}</button>
           </div>
           <p class="err" id="ferr" role="status">${escapeHtml(friendsStatus)}</p>`;
       }
@@ -1264,10 +1291,45 @@ async function paintFriendsPanel() {
         if (ferr) ferr.textContent = friendsStatus;
       }
     });
-    panel.querySelector("#fsend")?.addEventListener("click", () => void sendChat());
-    panel.querySelector("#fmsg")?.addEventListener("keydown", (e) => {
-      if ((e as KeyboardEvent).key === "Enter") void sendChat();
+    panel.querySelector("#mode-practice")?.addEventListener("click", () => {
+      typePractice = true;
+      localStorage.setItem("kids-go-type", "1");
+      if (!typeTarget) typeTarget = pickPracticePhrase(locale);
+      friendsStatus = "";
+      void paintFriendsPanel();
     });
+    panel.querySelector("#mode-free")?.addEventListener("click", () => {
+      typePractice = false;
+      localStorage.setItem("kids-go-type", "0");
+      friendsStatus = "";
+      void paintFriendsPanel();
+    });
+    panel.querySelector("#ftype-next")?.addEventListener("click", () => {
+      typeTarget = pickPracticePhrase(locale, typeTarget);
+      const input = panel.querySelector("#fmsg") as HTMLInputElement | null;
+      if (input) input.value = "";
+      updateTypeFeedback("");
+      if (input) {
+        input.placeholder = typeTarget;
+        input.focus();
+      }
+    });
+    panel.querySelector("#fsend")?.addEventListener("click", () => void sendChat());
+    const fmsg = panel.querySelector("#fmsg") as HTMLInputElement | null;
+    fmsg?.addEventListener("input", () => {
+      updateTypeFeedback(fmsg.value);
+    });
+    fmsg?.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter") {
+        e.preventDefault();
+        void sendChat();
+      }
+    });
+    // focus for touch-typing drill
+    if (friendsTab === "chat" && chatFriendshipId) {
+      fmsg?.focus();
+      if (typePractice) updateTypeFeedback(fmsg?.value || "");
+    }
     panel.querySelector("#fcopy")?.addEventListener("click", async () => {
       const text = (window as unknown as { __kidsShare?: string }).__kidsShare || "";
       try {
@@ -1289,8 +1351,28 @@ async function paintFriendsPanel() {
   }
 }
 
+function updateTypeFeedback(typed: string) {
+  if (!typePractice || !typeTarget) return;
+  const chk = checkTyping(typeTarget, typed);
+  const targetEl = document.querySelector("#ftype-target");
+  const accEl = document.querySelector("#ftype-acc");
+  const tipEl = document.querySelector("#ftype-tip");
+  const sendBtn = document.querySelector("#fsend") as HTMLButtonElement | null;
+  if (targetEl) targetEl.innerHTML = targetHtml(typeTarget, typed);
+  if (accEl) accEl.textContent = t(locale, "type_accuracy", { n: chk.accuracy });
+  accEl?.classList.toggle("type-good", chk.exact);
+  accEl?.classList.toggle("type-warn", !chk.exact && typed.length > 0);
+  if (tipEl) {
+    if (!typed) tipEl.textContent = t(locale, "type_hint");
+    else if (chk.exact) tipEl.textContent = t(locale, "type_ok");
+    else tipEl.textContent = t(locale, "type_fix");
+  }
+  if (sendBtn) sendBtn.disabled = !chk.exact;
+}
+
 async function startChat() {
   stopChatPoll();
+  if (!typeTarget) typeTarget = pickPracticePhrase(locale);
   try {
     const res = await api.friendMessages(chatFriendshipId!, 0);
     chatMsgs = res.messages;
@@ -1325,7 +1407,22 @@ async function pollChat() {
 async function sendChat() {
   if (!chatFriendshipId) return;
   const input = document.querySelector("#fmsg") as HTMLInputElement | null;
-  const body = input?.value.trim() || "";
+  let body = input?.value || "";
+  if (typePractice) {
+    const chk = checkTyping(typeTarget, body);
+    if (!chk.exact) {
+      friendsStatus = t(locale, "type_fix");
+      updateTypeFeedback(body);
+      const ferr = document.querySelector("#ferr");
+      if (ferr) ferr.textContent = friendsStatus;
+      sfx.wrong();
+      return;
+    }
+    // send the model line (normalized) so friend receives clean text
+    body = typeTarget;
+  } else {
+    body = body.trim();
+  }
   if (!body) return;
   try {
     const r = await api.friendSend(chatFriendshipId, body);
@@ -1333,7 +1430,17 @@ async function sendChat() {
     chatSince = Math.max(chatSince, r.message.at);
     if (input) input.value = "";
     friendsStatus = "";
-    void api.track("friend_msg");
+    if (typePractice) {
+      typeWins += 1;
+      localStorage.setItem("kids-go-type-wins", String(typeWins));
+      typeTarget = pickPracticePhrase(locale, typeTarget);
+      sfx.ok();
+      void api.track("friend_msg", { practice: true, accuracy: 100 });
+      updateTypeFeedback("");
+      if (input) input.placeholder = typeTarget;
+    } else {
+      void api.track("friend_msg", { practice: false });
+    }
     const log = document.querySelector("#chat-log");
     if (log) {
       log.innerHTML = chatMsgs
@@ -1341,6 +1448,12 @@ async function sendChat() {
         .join("");
       log.scrollTop = log.scrollHeight;
     }
+    // refresh stats line without full re-render
+    const statsHint = document.querySelector(".type-meta .muted");
+    if (statsHint && typePractice) statsHint.textContent = t(locale, "type_stats", { n: typeWins });
+    const tip = document.querySelector("#ftype-tip");
+    if (tip && typePractice) tip.textContent = t(locale, "type_ok");
+    input?.focus();
   } catch (e) {
     friendsStatus = errMsg(e);
     const ferr = document.querySelector("#ferr");

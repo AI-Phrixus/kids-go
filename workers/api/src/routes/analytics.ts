@@ -17,6 +17,7 @@ const ALLOWED = new Set([
   "friend_accept",
   "friend_msg",
   "friend_share",
+  "friend_type_practice",
 ]);
 
 analytics.post("/events", async (c) => {

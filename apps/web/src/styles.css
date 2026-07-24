@@ -388,4 +388,42 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
   color: var(--ink);
   border-bottom-left-radius: 4px;
 }
-.chat-compose input { flex: 1; min-width: 0; }
+.chat-compose input { flex: 1; min-width: 0; font-size: 1.05rem; letter-spacing: 0.02em; }
+
+/* Typing practice in chat */
+.type-mode { margin: 0.35rem 0 0.5rem; }
+.type-box {
+  background: #fff8ee;
+  border: 1px dashed #e6c89a;
+  border-radius: 12px;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.5rem;
+}
+.type-hint { font-size: 0.85rem; margin: 0.25rem 0 0.45rem; }
+.type-target {
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.7;
+  letter-spacing: 0.04em;
+  font-family: "SF Mono", "Menlo", "Consolas", "Noto Sans Mono CJK TC", monospace;
+  padding: 0.35rem 0.15rem;
+  user-select: none;
+}
+.ty-ch {
+  display: inline-block;
+  min-width: 0.55em;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.ty-ok { color: #2f6f4e; background: rgba(47, 111, 78, 0.12); }
+.ty-bad { color: #a33; background: rgba(170, 51, 51, 0.15); text-decoration: underline wavy #a33; }
+.ty-todo { color: #8a7a68; }
+.ty-cur {
+  box-shadow: inset 0 -2px 0 var(--accent);
+  background: rgba(196, 92, 38, 0.12);
+}
+.ty-extra { color: #a33; font-size: 0.85rem; margin-left: 0.25rem; }
+.type-meta { font-size: 0.9rem; margin: 0.35rem 0 0.15rem; }
+.type-acc.type-good { color: var(--ok); font-weight: 800; }
+.type-acc.type-warn { color: #a33; font-weight: 700; }
+.type-tip { min-height: 1.2em; margin: 0.15rem 0 0; font-size: 0.9rem; }
