@@ -10,7 +10,7 @@ import {
   type Color,
 } from "../../../packages/go-engine/src/index";
 import { api, type LessonDetail } from "./api";
-import { nextCareText } from "./care-rituals";
+import { nextCareText, nextPostureTip } from "./care-rituals";
 import { friendlyError } from "./errors";
 import { EyeCareClock } from "./eyecare";
 import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
@@ -57,10 +57,15 @@ let chatMsgs: { id: string; fromMe: boolean; body: string; at: number }[] = [];
 let chatSince = 0;
 let chatPollTimer: number | null = null;
 let friendsStatus = "";
-/** Chat compose: practice = must match target phrase; free = any short message */
-let typePractice = localStorage.getItem("kids-go-type") !== "0";
+/**
+ * Chat compose modes:
+ * - free (default): fun talk, no drill feel
+ * - spell quest (opt-in): match secret signal to send — game, not homework
+ */
+let typePractice = localStorage.getItem("kids-go-type") === "1";
 let typeTarget = "";
 let typeWins = Number(localStorage.getItem("kids-go-type-wins") || "0") || 0;
+let postureTip = "";
 
 const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20, dailyCapMin: 60 });
 clock.onBreak = () => showBreak(true);
@@ -164,7 +169,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.7.1 · <span id="mins">0</span> min · free AI rotate
+      v0.7.2 · <span id="mins">0</span> min · free AI rotate
       · <a href="#" id="help-link">${t(locale, "help")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
@@ -1170,6 +1175,7 @@ async function paintFriendsPanel() {
         body = `<p class="muted">${t(locale, "friends_pick")}</p><div class="row">${picks || "—"}</div>`;
       } else {
         if (!typeTarget) typeTarget = pickPracticePhrase(locale);
+        if (!postureTip) postureTip = nextPostureTip(locale);
         const bubbles = chatMsgs
           .map(
             (m) =>
@@ -1177,9 +1183,9 @@ async function paintFriendsPanel() {
           )
           .join("");
         const practiceBar = typePractice
-          ? `<div class="type-box">
+          ? `<div class="type-box type-quest">
               <div class="row between">
-                <span class="muted">${t(locale, "type_target")}</span>
+                <span class="type-quest-label">✨ ${t(locale, "type_target")}</span>
                 <button type="button" id="ftype-next">${t(locale, "type_next")}</button>
               </div>
               <p class="type-hint muted">${t(locale, "type_hint")}</p>
@@ -1193,9 +1199,13 @@ async function paintFriendsPanel() {
           : "";
         body = `
           <p><strong>💬 ${escapeHtml(chatNick)}</strong></p>
+          <div class="posture-tip" id="posture-tip" title="${escapeHtml(t(locale, "type_posture"))}">
+            <span>${escapeHtml(postureTip)}</span>
+            <button type="button" class="linkish" id="posture-next">${t(locale, "type_next")}</button>
+          </div>
           <div class="row type-mode">
-            <button type="button" id="mode-practice" class="${typePractice ? "primary" : ""}">${t(locale, "type_practice")}</button>
             <button type="button" id="mode-free" class="${!typePractice ? "primary" : ""}">${t(locale, "type_free")}</button>
+            <button type="button" id="mode-practice" class="${typePractice ? "primary" : ""}">${t(locale, "type_practice")}</button>
           </div>
           ${practiceBar}
           <div class="chat-log" id="chat-log">${bubbles || `<p class="muted">…</p>`}</div>
@@ -1303,6 +1313,11 @@ async function paintFriendsPanel() {
       localStorage.setItem("kids-go-type", "0");
       friendsStatus = "";
       void paintFriendsPanel();
+    });
+    panel.querySelector("#posture-next")?.addEventListener("click", () => {
+      postureTip = nextPostureTip(locale);
+      const el = panel.querySelector("#posture-tip span");
+      if (el) el.textContent = postureTip;
     });
     panel.querySelector("#ftype-next")?.addEventListener("click", () => {
       typeTarget = pickPracticePhrase(locale, typeTarget);

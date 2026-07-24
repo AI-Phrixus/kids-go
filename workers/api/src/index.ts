@@ -12,7 +12,7 @@ import settings from "./routes/settings";
 import { loadSession } from "./session";
 import type { Env } from "./types";
 
-const VERSION = "0.7.1";
+const VERSION = "0.7.2";
 
 const app = new Hono<{ Bindings: Env }>();
 

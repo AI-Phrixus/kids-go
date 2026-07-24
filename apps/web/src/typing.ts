@@ -1,42 +1,51 @@
 import type { Locale } from "./i18n";
 
-/** Short go / journey lines for shadow-typing practice (≤80 chars for chat). */
+/**
+ * Fun “spell / secret signal” lines for optional chat mini-game (≤80 chars).
+ * Framed as Journey play, not homework typing drills.
+ */
 const PHRASES: Record<Locale, string[]> = {
   "zh-Hant": [
     "金角銀邊草肚皮",
     "先數氣再下子",
-    "你好！一起學圍棋吧",
+    "你好一起學圍棋",
     "角落很重要",
     "連起來比較安全",
     "加油小行者",
-    "今天也要照顧眼睛",
-    "我在西行路上等你",
+    "今天眼睛也開心",
+    "我在西行等你",
     "叫吃要快逃",
-    "謝謝你當我的好友",
+    "謝謝你當好友",
+    "悟空說坐挺挺",
+    "肩膀放鬆再下棋",
   ],
   ja: [
     "金角銀辺草肚皮",
     "気を数えよう",
-    "こんにちは！囲碁を一緒に",
+    "囲碁を一緒に",
     "角が大切だよ",
     "つながると強い",
-    "がんばって行者さん",
+    "行者さんがんばれ",
     "目も休めよう",
-    "西への旅で待ってる",
+    "西の旅で待ってる",
     "アタリに注意",
     "ともだちありがとう",
+    "背すじすっと",
+    "かた力ぬいて",
   ],
   en: [
-    "Count liberties first",
     "Corners before center",
-    "Hello! Let's learn Go",
+    "Count liberties first",
+    "Lets learn Go",
     "Connect your stones",
-    "Good job, little pilgrim",
+    "Hi fellow pilgrim",
     "Rest your eyes too",
     "See you on the board",
-    "Atari means one liberty",
-    "Thanks for being my friend",
-    "Practice makes progress",
+    "Atari means danger",
+    "Thanks friend",
+    "Sit tall like bamboo",
+    "Soft fingers soft keys",
+    "Breathe then play",
   ],
 };
 
