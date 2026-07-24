@@ -16,6 +16,8 @@ binding = "AI"
 directory = "./apps/web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+# Ensure security headers / SW path go through Worker entry
+run_worker_first = true
 
 # Primary human URL (verified live). Extra routes kept as backup.
 [[routes]]
