@@ -1,14 +1,17 @@
-name = "kids-go-api"
-main = "workers/api/src/index.ts"
+name = "kids-go"
+main = "workers/api/src/entry.ts"
 compatibility_date = "2025-07-05"
 
-# Free plan friendly. Create DB then paste id:
-#   wrangler d1 create kids-go
 [[d1_databases]]
 binding = "DB"
 database_name = "kids-go"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "local-kids-go-placeholder"
 migrations_dir = "migrations"
+
+[assets]
+directory = "./apps/web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
 
 [vars]
 COACH_PROVIDER = "none"

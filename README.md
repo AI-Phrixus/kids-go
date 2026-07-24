@@ -8,7 +8,7 @@
 
 | | |
 |--|--|
-| **版本** | v0.0.1（設計與骨架） |
+| **版本** | v0.1.0（L01–L12 可玩 · 待遠端部署） |
 | **目標年齡** | 約 10–11 歲（小四 · 暑假→下學期） |
 | **UI 語言** | 日本語 · 繁體中文 · English |
 | **部署** | Cloudflare Pages + Workers Free + D1 Free |
@@ -57,13 +57,15 @@ Workers Free (Hono)  →  D1 用戶/進度
 git clone https://github.com/AI-Phrixus/kids-go.git
 cd kids-go
 cp .env.example .env
-# 可選：填 COACH_PROVIDER 與 API Key
-
-pnpm install   # 或 npm install
-pnpm dev       # 見 package.json scripts（骨架階段以 wrangler / vite 為準）
+npm install --legacy-peer-deps
+npm run build:web
+npx wrangler d1 migrations apply kids-go --local
+npx wrangler dev
+# 開啟 http://localhost:8787
+# 快速註冊暱稱+PIN → 西行地圖 → L01…
 ```
 
-部署見 [docs/DEPLOY.md](docs/DEPLOY.md)。
+部署見 [docs/DEPLOY.md](docs/DEPLOY.md)。需先 `npx wrangler login`。
 
 ---
 

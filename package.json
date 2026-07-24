@@ -1,15 +1,16 @@
 {
   "name": "kids-go",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Kids Igo — children's Go learning game (Cloudflare Free)",
   "scripts": {
-    "dev:api": "wrangler dev workers/api/src/index.ts",
+    "dev": "npm run build:web && wrangler dev",
+    "dev:api": "wrangler dev",
     "dev:web": "vite --config apps/web/vite.config.ts",
     "build:web": "vite build --config apps/web/vite.config.ts",
-    "deploy:api": "wrangler deploy",
+    "deploy": "npm run build:web && wrangler deploy",
     "db:local": "wrangler d1 migrations apply kids-go --local",
-    "typecheck": "tsc -p packages/go-engine --noEmit && tsc -p workers/api --noEmit"
+    "db:remote": "wrangler d1 migrations apply kids-go --remote"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250705.0",

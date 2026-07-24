@@ -1,14 +1,22 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { CoachRequest } from "./coach/contract";
-import { runCoach, type CoachEnv } from "./coach/service";
+import { runCoach } from "./coach/service";
+import auth from "./routes/auth";
+import progress from "./routes/progress";
+import type { Env } from "./types";
 
-type Bindings = CoachEnv & {
-  DB?: D1Database;
-};
+const VERSION = "0.1.0";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<{ Bindings: Env }>();
 
-const VERSION = "0.0.1";
+app.use(
+  "/api/*",
+  cors({
+    origin: (origin) => origin || "*",
+    credentials: true,
+  }),
+);
 
 app.get("/api/health", (c) =>
   c.json({
@@ -18,6 +26,9 @@ app.get("/api/health", (c) =>
   }),
 );
 
+app.route("/api/auth", auth);
+app.route("/api", progress);
+
 app.post("/api/coach", async (c) => {
   let body: Partial<CoachRequest>;
   try {
@@ -25,9 +36,10 @@ app.post("/api/coach", async (c) => {
   } catch {
     return c.json({ error: "invalid_json" }, 400);
   }
-  const locale = body.locale === "ja" || body.locale === "zh-Hant" || body.locale === "en"
-    ? body.locale
-    : "en";
+  const locale =
+    body.locale === "ja" || body.locale === "zh-Hant" || body.locale === "en"
+      ? body.locale
+      : "en";
   const req: CoachRequest = {
     tone: body.tone ?? "hint",
     speaker: body.speaker ?? "wukong",
@@ -42,7 +54,7 @@ app.post("/api/coach", async (c) => {
   return c.json(result);
 });
 
-app.get("/", (c) =>
+app.get("/api", (c) =>
   c.json({
     name: "kids-go-api",
     version: VERSION,
