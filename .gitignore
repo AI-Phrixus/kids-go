@@ -1,0 +1,30 @@
+# Secrets & local — NEVER commit
+.env
+.env.local
+.env.*.local
+.dev.vars
+.wrangler/
+*.db
+*.db-wal
+*.db-shm
+
+# Node / monorepo
+node_modules/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
