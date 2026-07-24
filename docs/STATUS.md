@@ -2,7 +2,7 @@
 
 > 無密鑰。  
 > **最後更新**：2026-07-24  
-> **程式版本**：v0.1.0（可玩閉環 · 待 Cloudflare 遠端部署）
+> **程式版本**：v0.1.1（Workers AI 免費鏈 + 軟上限提醒 · 待遠端部署）
 
 ---
 
@@ -13,7 +13,7 @@
 | 本機 | `npx wrangler dev` → http://localhost:8787 |
 | 生產部署 | **待** `wrangler login` + `d1 create` + `deploy` |
 | GitHub | https://github.com/AI-Phrixus/kids-go |
-| 教練 | 預設 `none` 靜態；可配 BYOK |
+| 教練 | **`auto`**：CF Workers AI 免費 → BYOK 第三方 → 靜態；軟上限 40 次/日 + `/api/coach/status` 提醒 |
 
 ---
 

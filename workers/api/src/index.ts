@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { CoachRequest } from "./coach/contract";
-import { runCoach } from "./coach/service";
+import { getCoachStatus, runCoach } from "./coach/service";
 import auth from "./routes/auth";
 import progress from "./routes/progress";
 import type { Env } from "./types";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -18,13 +18,27 @@ app.use(
   }),
 );
 
-app.get("/api/health", (c) =>
-  c.json({
+app.get("/api/health", async (c) => {
+  const status = await getCoachStatus(c.env, "en");
+  return c.json({
     ok: true,
     version: VERSION,
-    coachProvider: c.env.COACH_PROVIDER ?? "none",
-  }),
-);
+    coachProvider: c.env.COACH_PROVIDER ?? "auto",
+    coach: {
+      cfSuccessToday: status.cfSuccessToday,
+      cfSoftMaxCalls: status.cfSoftMaxCalls,
+      byokConfigured: status.byokConfigured,
+      workersAiBound: status.workersAiBound,
+      reminder: status.reminder,
+    },
+  });
+});
+
+app.get("/api/coach/status", async (c) => {
+  const locale = c.req.query("locale") || "zh-Hant";
+  const status = await getCoachStatus(c.env, locale);
+  return c.json(status);
+});
 
 app.route("/api/auth", auth);
 app.route("/api", progress);

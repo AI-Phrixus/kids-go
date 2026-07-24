@@ -20,5 +20,6 @@ export interface CoachResponse {
   parentNote?: string;
   tone: CoachTone;
   speaker: Speaker;
-  source: "llm" | "static";
+  source: "workers_ai" | "byok" | "static" | "llm";
+  reminder?: string;
 }

@@ -8,11 +8,19 @@ database_name = "kids-go"
 database_id = "local-kids-go-placeholder"
 migrations_dir = "migrations"
 
+# Cloudflare Workers AI (free tier: stay on Workers Free for hard stop, no overage bill)
+[ai]
+binding = "AI"
+
 [assets]
 directory = "./apps/web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
 [vars]
-COACH_PROVIDER = "none"
+# auto = Workers AI free first → BYOK third-party → static
+COACH_PROVIDER = "auto"
 COACH_TIMEOUT_MS = "2500"
+# Soft cap: successful CF AI coach calls per UTC day (switch to BYOK before free neuron hard wall)
+COACH_CF_SOFT_MAX_CALLS = "40"
+COACH_CF_MODEL = "@cf/meta/llama-3.1-8b-instruct"

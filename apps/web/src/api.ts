@@ -64,10 +64,18 @@ export const api = {
   saveGame: (body: unknown) =>
     req("/api/games", { method: "POST", body: JSON.stringify(body) }),
   coach: (body: unknown) =>
-    req<{ say: string; source: string }>("/api/coach", {
+    req<{ say: string; source: string; reminder?: string }>("/api/coach", {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  coachStatus: (locale: string) =>
+    req<{
+      reminder: string;
+      cfSuccessToday: number;
+      cfSoftMaxCalls: number;
+      byokConfigured: boolean;
+      workersAiBound: boolean;
+    }>(`/api/coach/status?locale=${encodeURIComponent(locale)}`),
 };
 
 export type LessonDetail = {

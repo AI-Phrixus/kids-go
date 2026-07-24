@@ -573,8 +573,8 @@ async function askCoach() {
       childName: name(),
       lessonId: lessonId,
       boardSummary: `toPlay=${board.toPlay} capB=${board.captured.black}`,
-    });
-    statusMsg = c.say;
+    }) as { say: string; reminder?: string; source?: string };
+    statusMsg = c.reminder ? `${c.say}\n—— ${c.reminder}` : c.say;
   } catch {
     statusMsg =
       locale === "zh-Hant"
