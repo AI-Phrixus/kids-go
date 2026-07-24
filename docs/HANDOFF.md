@@ -1,6 +1,6 @@
 # Kids Igo 交接手冊（新帳號／新 AI 接手必讀）
 
-> 版本：**v0.6.0**  
+> 版本：**v0.7.3**  
 > 最後更新：2026-07-24  
 > 目的：在**不依賴舊對話**的情況下接續開發與部署。
 
@@ -14,7 +14,11 @@
 - 故事：《西遊記》取經路包裝教程與休息  
 - 每課教程後人機（弱 AI）；進度雲端（D1）  
 - 護眼休息（20–20–20 + 角色儀式）  
-- 教練 LLM 可選、可換廠；預設離線句庫  
+- 教練：free_first（Groq → OpenRouter free → Gemini free → CF soft → 句庫）  
+- 好友：暱稱互加 + 短訊 + 邀請分享；可選暗號任務；姿勢小提示  
+- 站內「遊戲說明」完整教程（`apps/web/src/guide.ts`）  
+- Secrets：`GROQ_API_KEY` / `OPENROUTER_API_KEY` / `GOOGLE_API_KEY`（見 [FREE-AI.md](./FREE-AI.md)）  
+
 
 本地路徑（操作者）：
 

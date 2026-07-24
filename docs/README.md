@@ -12,6 +12,7 @@
 | [PRODUCT.md](./PRODUCT.md) | 產品願景 |
 | [CURRICULUM.md](./CURRICULUM.md) | 課綱 L01–L16 |
 | [GOALS.md](./GOALS.md) | 原始目標完成度 |
+| [FREE-AI.md](./FREE-AI.md) | 免費高效能 AI 評測與綁定 |
 | [I18N.md](./I18N.md) | 三語 |
 | [COACH-PROVIDERS.md](./COACH-PROVIDERS.md) | 教練多供應商 |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 想改程式 |
@@ -19,6 +20,8 @@
 | [OPERATIONS.md](./OPERATIONS.md) | 日常運維 |
 | [API.md](./API.md) | HTTP API |
 
+**終端用戶教程**在遊戲內：「遊戲說明／遊び方ガイド／How to play」（`apps/web/src/guide.ts`）。
+
 根目錄 [README.md](../README.md) 是總覽與快速開始。
 
-**密鑰不在本倉庫。**
+**密鑰不在本倉庫**（Cloudflare secrets / 本機 env）。

@@ -8,12 +8,14 @@
 
 | | |
 |--|--|
-| **版本** | v0.6.0 · L01–L20 |
+| **版本** | **v0.7.3** · L01–L20 |
 | **線上** | **https://go.tdtc.indevs.in** · https://go.tdtc.dpdns.org · workers.dev |
 | **目標年齡** | 約 10–11 歲（小四 · 暑假→下學期） |
 | **UI 語言** | 日本語 · 繁體中文 · English |
 | **部署** | Cloudflare Workers Free + D1 Free（assets 一體） |
-| **教練 AI** | CF Free Workers AI → BYOK → 本地句庫 |
+| **教練 AI** | 免費高效優先：Groq → OpenRouter free → Gemini free → CF soft → 句庫 |
+| **社交** | 暱稱互加好友 · 短訊聊天 · 邀請分享（無陌生人列表） |
+| **站內說明** | 完整九章「遊戲說明」目錄（三語） |
 | **倉庫** | https://github.com/AI-Phrixus/kids-go |
 
 > **新人接手請先讀**  
