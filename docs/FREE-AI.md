@@ -25,17 +25,20 @@
 
 ---
 
-## 鏈路（v0.6.1）
+## 鏈路（v0.6.2 · 免費高效能優先 · 自動輪換）
 
 ```text
-① Cloudflare Workers AI（免費）
-  → 失敗/軟上限
-② 站點 secrets：GROQ / OPENROUTER / GOOGLE（可選免費額）
-  → 失敗
-③ 使用者設定頁 BYOK
-  → 失敗
-④ 本地句庫 static
+① Groq（Llama 3.3 70B 等 · 站點 GROQ_API_KEY）— 最高優先、最快高質免費
+② OpenRouter 免費模型輪換（openrouter/free → Nemotron/Gemma free 等）
+③ Google Gemini free（若有 GOOGLE_API_KEY）
+④ Cloudflare Workers AI（軟上限，防 Neurons 硬限）
+⑤ 使用者 BYOK（可能付費 · 僅 free 全失敗或 preferByok）
+⑥ 本地句庫 static
 ```
+
+- 同提供商內模型按 **UTC 小時** 旋轉起點，分散 rate limit。  
+- 站點 OpenRouter **不會**自動選 `openai/gpt-4o` 等付費 slug（除非你自行改 secret 為付費模型）。  
+- 環境變數 `COACH_CHAIN_MODE=cf_first` 可恢復舊的 CF 優先。
 
 ---
 

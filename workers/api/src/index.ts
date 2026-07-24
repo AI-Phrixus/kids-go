@@ -11,7 +11,7 @@ import settings from "./routes/settings";
 import { loadSession } from "./session";
 import type { Env } from "./types";
 
-const VERSION = "0.6.1";
+const VERSION = "0.6.2";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -58,6 +58,8 @@ app.get("/api/health", async (c) => {
       byokConfigured: status.byokConfigured,
       freeTierConfigured: status.freeTierConfigured,
       freeTierProviders: status.freeTierProviders,
+      freePriority: status.freePriority,
+      freeFirst: status.freeFirst,
       workersAiBound: status.workersAiBound,
       reminder: status.reminder,
       chain: status.chain,

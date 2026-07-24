@@ -151,7 +151,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.6.1 · <span id="mins">0</span> min · Cloudflare Free
+      v0.6.2 · <span id="mins">0</span> min · free AI rotate
       · <a href="#" id="help-link">${t(locale, "help")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
