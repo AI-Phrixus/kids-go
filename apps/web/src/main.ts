@@ -120,6 +120,10 @@ function render() {
 }
 
 function shell(body: string) {
+  const offlineBar =
+    typeof navigator !== "undefined" && navigator.onLine === false
+      ? `<p class="banner offline-banner" role="status">${t(locale, "offline")}</p>`
+      : "";
   app.innerHTML = `
     <header class="top">
       <div>
@@ -134,6 +138,7 @@ function shell(body: string) {
         </select>
       </label>
     </header>
+    ${offlineBar}
     ${body}
     <div class="overlay hidden" id="break" role="dialog" aria-modal="true" aria-labelledby="care-title">
       <div class="panel">
@@ -1091,8 +1096,21 @@ async function renderParent() {
       <p>${escapeHtml(next)}</p>
       <h3>${t(locale, "parent")}</h3>
       <ul>${tips}</ul>
-      <button class="primary" id="home">${t(locale, "home")}</button>
+      <div class="row">
+        <button class="primary" id="home">${t(locale, "home")}</button>
+        <button id="copy-sum">${t(locale, "copy_summary")}</button>
+      </div>
+      <p class="muted" id="copy-msg" role="status"></p>
     `;
+    // stash plain text for copy
+    (window as unknown as { __kidsGoParentCopy?: string }).__kidsGoParentCopy = [
+      s.headline,
+      `${s.stats.completedCount}/${s.stats.totalLessons} · ★${s.stats.totalStars}`,
+      s.nextLesson ? `${s.nextLesson.id} ${s.nextLesson.title}` : "",
+      ...s.parentTips,
+    ]
+      .filter(Boolean)
+      .join("\n");
   } catch (e) {
     body = `<p class="err">${escapeHtml(errMsg(e))}</p>
       <button id="home">${t(locale, "home")}</button>`;
@@ -1101,6 +1119,16 @@ async function renderParent() {
   document.querySelector("#home")?.addEventListener("click", () => {
     route = "map";
     void renderMap();
+  });
+  document.querySelector("#copy-sum")?.addEventListener("click", async () => {
+    const text = (window as unknown as { __kidsGoParentCopy?: string }).__kidsGoParentCopy || "";
+    const msg = document.querySelector("#copy-msg");
+    try {
+      await navigator.clipboard.writeText(text);
+      if (msg) msg.textContent = t(locale, "copied");
+    } catch {
+      if (msg) msg.textContent = text.slice(0, 80);
+    }
   });
 }
 
@@ -1308,6 +1336,23 @@ setInterval(() => {
   const mins = document.querySelector("#mins");
   if (mins) mins.textContent = String(clock.activeMinutes());
 }, 1000);
+
+function syncOfflineBanner() {
+  const existing = document.querySelector(".offline-banner");
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  if (offline && !existing) {
+    const bar = document.createElement("p");
+    bar.className = "banner offline-banner";
+    bar.setAttribute("role", "status");
+    bar.textContent = t(locale, "offline");
+    const header = document.querySelector("header.top");
+    header?.insertAdjacentElement("afterend", bar);
+  } else if (!offline && existing) {
+    existing.remove();
+  }
+}
+window.addEventListener("online", () => syncOfflineBanner());
+window.addEventListener("offline", () => syncOfflineBanner());
 
 void (null as unknown as Color);
 void boot();

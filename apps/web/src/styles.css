@@ -151,6 +151,11 @@ label { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.45rem 0; 
   margin: 0.35rem 0 0.75rem;
   font-size: 0.9rem;
 }
+.offline-banner {
+  background: #fde8e8;
+  border-color: #e8a0a0;
+  color: #7a2e2e;
+}
 label.check {
   flex-direction: row;
   align-items: center;

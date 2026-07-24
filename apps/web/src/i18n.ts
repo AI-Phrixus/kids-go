@@ -95,6 +95,9 @@ const dict: Record<Locale, Record<string, string>> = {
     race_lose: "AIが先に {{n}} 子。もういちど！",
     place_progress: "{{cur}}/{{need}} 手",
     testing: "テスト中…",
+    offline: "オフラインです。進捗の同期はネット復帰後に。",
+    copy_summary: "まとめをコピー",
+    copied: "コピーしたよ",
   },
   "zh-Hant": {
     title: "Kids Igo · 西遊圍棋",
@@ -190,6 +193,9 @@ const dict: Record<Locale, Record<string, string>> = {
     race_lose: "AI 先吃滿 {{n}} 子。再試一次！",
     place_progress: "{{cur}}/{{need}} 手",
     testing: "測試中…",
+    offline: "目前離線。進度同步會在恢復網路後進行。",
+    copy_summary: "複製摘要",
+    copied: "已複製",
   },
   en: {
     title: "Kids Igo · Journey Go",
@@ -285,6 +291,9 @@ const dict: Record<Locale, Record<string, string>> = {
     race_lose: "AI reached {{n}}. Try again!",
     place_progress: "{{cur}}/{{need}} moves",
     testing: "Testing…",
+    offline: "You are offline. Progress syncs when the network returns.",
+    copy_summary: "Copy summary",
+    copied: "Copied",
   },
 };
 
