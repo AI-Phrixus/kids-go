@@ -48,6 +48,14 @@ let consecutivePasses = 0;
 let boardBusy = false;
 let focusCell: { x: number; y: number } | null = null;
 let allLessonIds: string[] = [];
+let friendsOpen = false;
+let friendsTab: "list" | "add" | "chat" | "share" = "list";
+let chatFriendshipId: string | null = null;
+let chatNick = "";
+let chatMsgs: { id: string; fromMe: boolean; body: string; at: number }[] = [];
+let chatSince = 0;
+let chatPollTimer: number | null = null;
+let friendsStatus = "";
 
 const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20, dailyCapMin: 60 });
 clock.onBreak = () => showBreak(true);
@@ -151,11 +159,14 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.6.3 · <span id="mins">0</span> min · free AI rotate
+      v0.7.0 · <span id="mins">0</span> min · free AI rotate
       · <a href="#" id="help-link">${t(locale, "help")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
     </p>
+    <div class="overlay ${friendsOpen ? "" : "hidden"}" id="friends-modal" role="dialog" aria-modal="true">
+      <div class="panel friends-panel" id="friends-panel"></div>
+    </div>
   `;
   document.querySelector("#sfx-toggle")?.addEventListener("click", () => {
     setSfxEnabled(!sfxEnabled());
@@ -179,6 +190,7 @@ function shell(body: string) {
     void api.saveLocale(locale).catch(() => undefined);
     render();
   });
+  if (friendsOpen) void paintFriendsPanel();
 }
 
 function escapeHtml(s: string): string {
@@ -395,6 +407,7 @@ async function renderMap() {
       <div class="row between">
         <h2>${t(locale, "journey")} · ${escapeHtml(name())}</h2>
         <div class="row">
+          <button id="friends" class="primary">${t(locale, "friends")}</button>
           <button id="parent">${t(locale, "parent")}</button>
           <button id="settings">${t(locale, "settings")}</button>
           <button id="logout">${t(locale, "logout")}</button>
@@ -407,6 +420,7 @@ async function renderMap() {
       <div class="row">
         ${continueLessonId ? `<button class="primary" id="continue">${t(locale, "continue_lesson")} ${continueLessonId}</button>` : ""}
         <button id="free">${t(locale, "free")}</button>
+        <button id="friends2">${t(locale, "friends_share")}</button>
       </div>
       <div class="map path" role="list">${lessonsHtml}</div>
     </div>
@@ -425,6 +439,14 @@ async function renderMap() {
     route = "parent";
     pushNav("parent");
     render();
+  });
+  document.querySelector("#friends")?.addEventListener("click", () => {
+    friendsTab = "list";
+    openFriends();
+  });
+  document.querySelector("#friends2")?.addEventListener("click", () => {
+    friendsTab = "share";
+    openFriends();
   });
   document.querySelector("#free")?.addEventListener("click", () => {
     board = createEmptyBoard(9);
@@ -1055,6 +1077,274 @@ function goHome() {
   } else {
     route = "welcome";
     render();
+  }
+}
+
+function stopChatPoll() {
+  if (chatPollTimer) {
+    window.clearInterval(chatPollTimer);
+    chatPollTimer = null;
+  }
+}
+
+function openFriends() {
+  friendsOpen = true;
+  friendsStatus = "";
+  void paintFriendsPanel();
+  const el = document.querySelector("#friends-modal");
+  el?.classList.remove("hidden");
+}
+
+function closeFriends() {
+  friendsOpen = false;
+  stopChatPoll();
+  document.querySelector("#friends-modal")?.classList.add("hidden");
+}
+
+async function paintFriendsPanel() {
+  const panel = document.querySelector("#friends-panel");
+  if (!panel) return;
+  panel.innerHTML = `<p class="muted">${t(locale, "loading")}</p>`;
+  try {
+    const data = await api.friends();
+    nickname = data.me.nickname || nickname;
+    const siteUrl = location.origin + "/";
+    const tabs = `
+      <div class="tabs friends-tabs">
+        <button data-ftab="list" class="${friendsTab === "list" ? "on" : ""}">${t(locale, "friends_list")}</button>
+        <button data-ftab="add" class="${friendsTab === "add" ? "on" : ""}">${t(locale, "friends_add")}</button>
+        <button data-ftab="chat" class="${friendsTab === "chat" ? "on" : ""}">${t(locale, "friends_chat")}</button>
+        <button data-ftab="share" class="${friendsTab === "share" ? "on" : ""}">${t(locale, "friends_share")}</button>
+      </div>`;
+
+    let body = "";
+    if (friendsTab === "list") {
+      const pendingIn = data.pendingIn
+        .map(
+          (f) =>
+            `<div class="friend-row">
+              <span>${escapeHtml(f.nickname)}</span>
+              <button data-accept="${f.id}" class="primary">${t(locale, "friends_accept")}</button>
+            </div>`,
+        )
+        .join("");
+      const pendingOut = data.pendingOut
+        .map((f) => `<div class="friend-row muted"><span>${escapeHtml(f.nickname)} …</span></div>`)
+        .join("");
+      const flist = data.friends.length
+        ? data.friends
+            .map(
+              (f) =>
+                `<div class="friend-row">
+                  <button class="linkish" data-chat="${f.id}" data-nick="${escapeHtml(f.nickname)}">💬 ${escapeHtml(f.nickname)}</button>
+                  <button data-rm="${f.id}" class="danger-lite">${t(locale, "friends_remove")}</button>
+                </div>`,
+            )
+            .join("")
+        : `<p class="muted">${t(locale, "friends_empty")}</p>`;
+      body = `
+        <p class="muted">${t(locale, "friends_my_name")}: <strong>${escapeHtml(data.me.nickname)}</strong></p>
+        ${data.pendingIn.length ? `<h3>${t(locale, "friends_pending_in")}</h3>${pendingIn}` : ""}
+        ${data.pendingOut.length ? `<h3>${t(locale, "friends_pending_out")}</h3>${pendingOut}` : ""}
+        <h3>${t(locale, "friends_list")}</h3>
+        ${flist}`;
+    } else if (friendsTab === "add") {
+      body = `
+        <p class="story">${t(locale, "friends_add_hint")}</p>
+        <label>${t(locale, "nickname")}<input id="fnick" maxlength="12" autocomplete="off" /></label>
+        <button class="primary" id="fadd">${t(locale, "friends_add")}</button>
+        <p class="err" id="ferr" role="status">${escapeHtml(friendsStatus)}</p>`;
+    } else if (friendsTab === "chat") {
+      if (!chatFriendshipId) {
+        const picks = data.friends
+          .map(
+            (f) =>
+              `<button class="friend-chip" data-chat="${f.id}" data-nick="${escapeHtml(f.nickname)}">${escapeHtml(f.nickname)}</button>`,
+          )
+          .join("");
+        body = `<p class="muted">${t(locale, "friends_pick")}</p><div class="row">${picks || "—"}</div>`;
+      } else {
+        const bubbles = chatMsgs
+          .map(
+            (m) =>
+              `<div class="chat-bubble ${m.fromMe ? "me" : "them"}">${escapeHtml(m.body)}</div>`,
+          )
+          .join("");
+        body = `
+          <p><strong>💬 ${escapeHtml(chatNick)}</strong></p>
+          <div class="chat-log" id="chat-log">${bubbles || `<p class="muted">…</p>`}</div>
+          <div class="row chat-compose">
+            <input id="fmsg" maxlength="80" placeholder="${escapeHtml(t(locale, "friends_msg_placeholder"))}" />
+            <button class="primary" id="fsend">${t(locale, "friends_send")}</button>
+          </div>
+          <p class="err" id="ferr" role="status">${escapeHtml(friendsStatus)}</p>`;
+      }
+    } else {
+      const share = t(locale, "friends_share_text", { name: data.me.nickname, url: siteUrl });
+      body = `
+        <p class="story">${escapeHtml(share)}</p>
+        <p class="muted">${t(locale, "friends_my_name")}: <strong>${escapeHtml(data.me.nickname)}</strong></p>
+        <div class="row">
+          <button class="primary" id="fcopy">${t(locale, "copy_summary")}</button>
+        </div>
+        <p class="muted" id="ferr" role="status">${escapeHtml(friendsStatus)}</p>`;
+      (window as unknown as { __kidsShare?: string }).__kidsShare = share;
+    }
+
+    panel.innerHTML = `
+      <div class="row between">
+        <h2>${t(locale, "friends_title")}</h2>
+        <button type="button" id="fclose">${t(locale, "friends_close")}</button>
+      </div>
+      ${tabs}
+      <div class="friends-body">${body}</div>`;
+
+    panel.querySelector("#fclose")?.addEventListener("click", () => closeFriends());
+    panel.querySelectorAll("[data-ftab]").forEach((b) =>
+      b.addEventListener("click", () => {
+        friendsTab = (b as HTMLElement).dataset.ftab as typeof friendsTab;
+        if (friendsTab !== "chat") stopChatPoll();
+        void paintFriendsPanel();
+      }),
+    );
+    panel.querySelectorAll("[data-accept]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        try {
+          await api.friendAccept((b as HTMLElement).dataset.accept!);
+          void api.track("friend_accept");
+          friendsStatus = t(locale, "friends_added_mutual");
+          void paintFriendsPanel();
+        } catch (e) {
+          friendsStatus = errMsg(e);
+          void paintFriendsPanel();
+        }
+      }),
+    );
+    panel.querySelectorAll("[data-rm]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        try {
+          await api.friendRemove((b as HTMLElement).dataset.rm!);
+          if (chatFriendshipId === (b as HTMLElement).dataset.rm) {
+            chatFriendshipId = null;
+            chatMsgs = [];
+            stopChatPoll();
+          }
+          void paintFriendsPanel();
+        } catch (e) {
+          friendsStatus = errMsg(e);
+          void paintFriendsPanel();
+        }
+      }),
+    );
+    panel.querySelectorAll("[data-chat]").forEach((b) =>
+      b.addEventListener("click", () => {
+        chatFriendshipId = (b as HTMLElement).dataset.chat!;
+        chatNick = (b as HTMLElement).dataset.nick || "";
+        chatMsgs = [];
+        chatSince = 0;
+        friendsTab = "chat";
+        friendsStatus = "";
+        void startChat();
+      }),
+    );
+    panel.querySelector("#fadd")?.addEventListener("click", async () => {
+      const nick = (panel.querySelector("#fnick") as HTMLInputElement)?.value.trim() || "";
+      try {
+        const r = await api.friendAdd(nick);
+        void api.track("friend_add", { status: r.status });
+        friendsStatus =
+          r.status === "accepted" || r.mutual
+            ? t(locale, "friends_added_mutual")
+            : t(locale, "friends_added_pending");
+        if (r.status === "accepted") friendsTab = "list";
+        void paintFriendsPanel();
+      } catch (e) {
+        friendsStatus = errMsg(e);
+        const ferr = panel.querySelector("#ferr");
+        if (ferr) ferr.textContent = friendsStatus;
+      }
+    });
+    panel.querySelector("#fsend")?.addEventListener("click", () => void sendChat());
+    panel.querySelector("#fmsg")?.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter") void sendChat();
+    });
+    panel.querySelector("#fcopy")?.addEventListener("click", async () => {
+      const text = (window as unknown as { __kidsShare?: string }).__kidsShare || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        friendsStatus = t(locale, "copied");
+        void api.track("friend_share");
+      } catch {
+        friendsStatus = text.slice(0, 60);
+      }
+      const ferr = panel.querySelector("#ferr");
+      if (ferr) ferr.textContent = friendsStatus;
+    });
+    const log = panel.querySelector("#chat-log");
+    if (log) log.scrollTop = log.scrollHeight;
+  } catch (e) {
+    panel.innerHTML = `<p class="err">${escapeHtml(errMsg(e))}</p>
+      <button id="fclose">${t(locale, "friends_close")}</button>`;
+    panel.querySelector("#fclose")?.addEventListener("click", () => closeFriends());
+  }
+}
+
+async function startChat() {
+  stopChatPoll();
+  try {
+    const res = await api.friendMessages(chatFriendshipId!, 0);
+    chatMsgs = res.messages;
+    chatSince = chatMsgs.reduce((m, x) => Math.max(m, x.at), 0);
+  } catch {
+    chatMsgs = [];
+  }
+  await paintFriendsPanel();
+  chatPollTimer = window.setInterval(() => void pollChat(), 4000);
+}
+
+async function pollChat() {
+  if (!chatFriendshipId || !friendsOpen) return;
+  try {
+    const res = await api.friendMessages(chatFriendshipId, chatSince);
+    if (res.messages.length) {
+      chatMsgs = [...chatMsgs, ...res.messages].slice(-80);
+      chatSince = chatMsgs.reduce((m, x) => Math.max(m, x.at), chatSince);
+      const log = document.querySelector("#chat-log");
+      if (log) {
+        log.innerHTML = chatMsgs
+          .map((m) => `<div class="chat-bubble ${m.fromMe ? "me" : "them"}">${escapeHtml(m.body)}</div>`)
+          .join("");
+        log.scrollTop = log.scrollHeight;
+      }
+    }
+  } catch {
+    /* ignore poll errors */
+  }
+}
+
+async function sendChat() {
+  if (!chatFriendshipId) return;
+  const input = document.querySelector("#fmsg") as HTMLInputElement | null;
+  const body = input?.value.trim() || "";
+  if (!body) return;
+  try {
+    const r = await api.friendSend(chatFriendshipId, body);
+    chatMsgs.push(r.message);
+    chatSince = Math.max(chatSince, r.message.at);
+    if (input) input.value = "";
+    friendsStatus = "";
+    void api.track("friend_msg");
+    const log = document.querySelector("#chat-log");
+    if (log) {
+      log.innerHTML = chatMsgs
+        .map((m) => `<div class="chat-bubble ${m.fromMe ? "me" : "them"}">${escapeHtml(m.body)}</div>`)
+        .join("");
+      log.scrollTop = log.scrollHeight;
+    }
+  } catch (e) {
+    friendsStatus = errMsg(e);
+    const ferr = document.querySelector("#ferr");
+    if (ferr) ferr.textContent = friendsStatus;
   }
 }
 

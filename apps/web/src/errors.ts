@@ -41,6 +41,36 @@ const MAP: Record<string, Record<Locale, string>> = {
     "zh-Hant": "Base URL 必須以 https:// 開頭。",
     en: "Base URL must start with https://.",
   },
+  friend_not_found: {
+    ja: "そのなまえの行者は見つからないよ。つづりを確認してね。",
+    "zh-Hant": "找不到這個暱稱的小行者，請再確認一下。",
+    en: "No pilgrim with that nickname. Check the spelling.",
+  },
+  friend_ambiguous: {
+    ja: "同じなまえが複数いるよ。別のなまえで試してね。",
+    "zh-Hant": "有多個相同暱稱，請換一個更獨特的。",
+    en: "That nickname matches more than one account.",
+  },
+  cannot_add_self: {
+    ja: "じぶんには送れないよ！",
+    "zh-Hant": "不能加自己當好友喔！",
+    en: "You can't add yourself!",
+  },
+  friend_limit: {
+    ja: "ともだちが上限だよ。",
+    "zh-Hant": "好友人數已達上限。",
+    en: "Friend list is full.",
+  },
+  not_friends: {
+    ja: "まだともだちじゃないよ。先に承認してね。",
+    "zh-Hant": "還不是好友，請先互加／接受邀請。",
+    en: "Not friends yet — accept the request first.",
+  },
+  invalid_message: {
+    ja: "メッセージが送れないよ（短く・やさしいことばで）。",
+    "zh-Hant": "訊息無法送出（請用簡短友善的話，勿貼連結）。",
+    en: "Can't send that message (keep it short & kind, no links).",
+  },
 };
 
 const FALLBACK: Record<Locale, string> = {

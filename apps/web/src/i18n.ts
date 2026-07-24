@@ -98,6 +98,27 @@ const dict: Record<Locale, Record<string, string>> = {
     offline: "オフラインです。進捗の同期はネット復帰後に。",
     copy_summary: "まとめをコピー",
     copied: "コピーしたよ",
+    friends: "ともだち",
+    friends_title: "行者の仲間",
+    friends_add: "なまえで追加",
+    friends_add_hint: "ともだちのなまえ（ニックネーム）を教えてもらって入力してね。知っている人だけ追加できるよ。",
+    friends_pending_in: "届いたリクエスト",
+    friends_pending_out: "送ったリクエスト",
+    friends_list: "なかま一覧",
+    friends_chat: "おしゃべり",
+    friends_share: "しょうたい",
+    friends_accept: "OKする",
+    friends_remove: "解除",
+    friends_send: "送る",
+    friends_empty: "まだともだちがいないよ。なまえを聞いて追加しよう！",
+    friends_added_pending: "リクエストを送ったよ。相手も君のなまえで追加するとなかまになるよ！",
+    friends_added_mutual: "なかまになった！",
+    friends_share_text:
+      "Kids Igoで囲碁を学ぼう！私のなまえは「{{name}}」。サイトでなまえを入力してなかまになってね → {{url}}",
+    friends_msg_placeholder: "やさしいことばで…（80字まで）",
+    friends_close: "とじる",
+    friends_pick: "おしゃべりする相手を選んでね",
+    friends_my_name: "あなたのなまえ",
   },
   "zh-Hant": {
     title: "Kids Igo · 西遊圍棋",
@@ -196,6 +217,27 @@ const dict: Record<Locale, Record<string, string>> = {
     offline: "目前離線。進度同步會在恢復網路後進行。",
     copy_summary: "複製摘要",
     copied: "已複製",
+    friends: "好友",
+    friends_title: "西行夥伴",
+    friends_add: "用暱稱加好友",
+    friends_add_hint: "請輸入好朋友告訴你的「暱稱」。只有知道暱稱的人才能互加，比較安全。",
+    friends_pending_in: "收到的邀請",
+    friends_pending_out: "已送出的邀請",
+    friends_list: "好友列表",
+    friends_chat: "聊天",
+    friends_share: "邀請同學",
+    friends_accept: "接受",
+    friends_remove: "解除",
+    friends_send: "送出",
+    friends_empty: "還沒有好友～請同學告訴你暱稱再加吧！",
+    friends_added_pending: "已送出邀請。對方也用你的暱稱加回來，就會成為好友！",
+    friends_added_mutual: "成為好友了！",
+    friends_share_text:
+      "我在 Kids Igo 學圍棋！我的暱稱是「{{name}}」，打開網站輸入我的暱稱就能加好友 → {{url}}",
+    friends_msg_placeholder: "說句友善的話…（最多 80 字，勿貼連結）",
+    friends_close: "關閉",
+    friends_pick: "選一位好友開始聊天",
+    friends_my_name: "你的暱稱",
   },
   en: {
     title: "Kids Igo · Journey Go",
@@ -294,13 +336,42 @@ const dict: Record<Locale, Record<string, string>> = {
     offline: "You are offline. Progress syncs when the network returns.",
     copy_summary: "Copy summary",
     copied: "Copied",
+    friends: "Friends",
+    friends_title: "Fellow pilgrims",
+    friends_add: "Add by nickname",
+    friends_add_hint:
+      "Type the nickname your friend told you. Only people who know the nickname can connect — safer for kids.",
+    friends_pending_in: "Incoming requests",
+    friends_pending_out: "Sent requests",
+    friends_list: "Friends",
+    friends_chat: "Chat",
+    friends_share: "Invite classmates",
+    friends_accept: "Accept",
+    friends_remove: "Remove",
+    friends_send: "Send",
+    friends_empty: "No friends yet — ask a classmate for their nickname!",
+    friends_added_pending: "Request sent. When they add your nickname too, you become friends!",
+    friends_added_mutual: "You're friends now!",
+    friends_share_text:
+      "I'm learning Go on Kids Igo! My nickname is \"{{name}}\". Open the site and add me by nickname → {{url}}",
+    friends_msg_placeholder: "Kind words only… (max 80 chars, no links)",
+    friends_close: "Close",
+    friends_pick: "Pick a friend to chat",
+    friends_my_name: "Your nickname",
   },
 };
 
 export function t(
   locale: Locale,
   key: string,
-  vars?: { name?: string; n?: number | string; cur?: number | string; total?: number | string; need?: number | string },
+  vars?: {
+    name?: string;
+    n?: number | string;
+    cur?: number | string;
+    total?: number | string;
+    need?: number | string;
+    url?: string;
+  },
 ): string {
   const raw = dict[locale]?.[key] ?? dict.en[key] ?? key;
   return raw
@@ -308,7 +379,8 @@ export function t(
     .replaceAll("{{n}}", String(vars?.n ?? ""))
     .replaceAll("{{cur}}", String(vars?.cur ?? ""))
     .replaceAll("{{total}}", String(vars?.total ?? ""))
-    .replaceAll("{{need}}", String(vars?.need ?? ""));
+    .replaceAll("{{need}}", String(vars?.need ?? ""))
+    .replaceAll("{{url}}", vars?.url ?? "");
 }
 
 export function fallbackName(locale: Locale): string {

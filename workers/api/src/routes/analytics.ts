@@ -13,6 +13,10 @@ const ALLOWED = new Set([
   "free_play_start",
   "capture_race_win",
   "coach_hint",
+  "friend_add",
+  "friend_accept",
+  "friend_msg",
+  "friend_share",
 ]);
 
 analytics.post("/events", async (c) => {

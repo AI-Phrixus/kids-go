@@ -5,13 +5,14 @@ import type { CoachRequest } from "./coach/contract";
 import { getCoachStatus, runCoach } from "./coach/service";
 import analytics from "./routes/analytics";
 import auth from "./routes/auth";
+import friends from "./routes/friends";
 import parent from "./routes/parent";
 import progress from "./routes/progress";
 import settings from "./routes/settings";
 import { loadSession } from "./session";
 import type { Env } from "./types";
 
-const VERSION = "0.6.3";
+const VERSION = "0.7.0";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -88,6 +89,7 @@ app.route("/api", progress);
 app.route("/api", parent);
 app.route("/api/settings", settings);
 app.route("/api", analytics);
+app.route("/api", friends);
 
 app.post("/api/coach", async (c) => {
   const ip = c.req.header("cf-connecting-ip") || "local";

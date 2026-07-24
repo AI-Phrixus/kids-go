@@ -148,6 +148,38 @@ export const api = {
       };
       counts: Record<string, number>;
     }>("/api/stats"),
+  friends: () =>
+    req<{
+      me: { id: string; nickname: string };
+      friends: { id: string; nickname: string; childId: string; status: string }[];
+      pendingIn: { id: string; nickname: string; childId: string; status: string }[];
+      pendingOut: { id: string; nickname: string; childId: string; status: string }[];
+      limits: { maxFriends: number; maxMsgLen: number };
+    }>("/api/friends"),
+  friendAdd: (nickname: string) =>
+    req<{ ok: boolean; status: string; friendshipId?: string; mutual?: boolean; already?: boolean }>(
+      "/api/friends/add",
+      { method: "POST", body: JSON.stringify({ nickname }) },
+    ),
+  friendAccept: (friendshipId: string) =>
+    req<{ ok: boolean; status: string }>("/api/friends/accept", {
+      method: "POST",
+      body: JSON.stringify({ friendshipId }),
+    }),
+  friendRemove: (friendshipId: string) =>
+    req<{ ok: boolean }>("/api/friends/remove", {
+      method: "POST",
+      body: JSON.stringify({ friendshipId }),
+    }),
+  friendMessages: (friendshipId: string, since = 0) =>
+    req<{ messages: { id: string; fromMe: boolean; body: string; at: number }[] }>(
+      `/api/friends/messages?friendshipId=${encodeURIComponent(friendshipId)}&since=${since}`,
+    ),
+  friendSend: (friendshipId: string, body: string) =>
+    req<{ ok: boolean; message: { id: string; fromMe: boolean; body: string; at: number } }>(
+      "/api/friends/messages",
+      { method: "POST", body: JSON.stringify({ friendshipId, body }) },
+    ),
 };
 
 export type LessonDetail = {
