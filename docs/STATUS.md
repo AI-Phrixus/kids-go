@@ -2,7 +2,7 @@
 
 > 無密鑰。  
 > **最後更新**：2026-07-24  
-> **程式版本**：v0.1.1（已部署）
+> **程式版本**：v0.1.2（已部署 · 含第三方 AI 設定頁）
 
 ---
 
@@ -27,13 +27,10 @@
 3. 西行地圖 → L01…L12  
 4. 約 20 分鐘會有護眼歇腳站  
 
-### 可選：第三方教練備援
+### 第三方教練（網頁填寫）
 
-```bash
-cd ~/kids-go
-npx wrangler secret put GOOGLE_API_KEY
-# 或 XAI_API_KEY / AI_API_KEY + BASE_URL
-```
+登入 → 地圖右上 **「設定（第三方 AI）」** → 填 **Base URL / API Key / Model** → 儲存／測試連線。  
+亦可 `npx wrangler secret put …` 作全域備援。
 
 ---
 
