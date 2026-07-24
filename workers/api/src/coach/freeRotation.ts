@@ -140,14 +140,15 @@ export function buildFreeFirstSlots(
 
   // —— Free tier 3: Google Gemini free (if site key) ——
   if (env.GOOGLE_API_KEY) {
+    const gModel = env.GOOGLE_MODEL || "gemini-flash-latest";
     free.push({
-      id: `google:${env.GOOGLE_MODEL || "gemini-2.0-flash"}`,
+      id: `google:${gModel}`,
       rank: 30,
       tier: "free",
       build: () =>
         createGoogleProvider({
           apiKey: env.GOOGLE_API_KEY!,
-          model: env.GOOGLE_MODEL || "gemini-2.0-flash",
+          model: gModel,
         }),
     });
   }
