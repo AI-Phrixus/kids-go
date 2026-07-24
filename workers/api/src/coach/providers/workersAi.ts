@@ -33,13 +33,21 @@ function extractText(out: unknown): string {
   if (!out) return "";
   if (typeof out === "string") return out;
   const o = out as {
-    response?: string;
+    response?: string | { response?: string };
     result?: string;
     output_text?: string;
+    description?: string;
+    choices?: { message?: { content?: string } }[];
   };
   if (typeof o.response === "string") return o.response;
+  if (o.response && typeof o.response === "object" && typeof o.response.response === "string") {
+    return o.response.response;
+  }
   if (typeof o.result === "string") return o.result;
   if (typeof o.output_text === "string") return o.output_text;
+  if (typeof o.description === "string") return o.description;
+  const choice = o.choices?.[0]?.message?.content;
+  if (typeof choice === "string") return choice;
   try {
     return JSON.stringify(out);
   } catch {
