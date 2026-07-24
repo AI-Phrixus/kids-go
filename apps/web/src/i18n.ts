@@ -49,6 +49,10 @@ const dict: Record<Locale, Record<string, string>> = {
     progress: "進捗",
     next_stop: "次の駅",
     journey: "取経の道",
+    continue_lesson: "つづきから",
+    show_libs: "気を表示",
+    undo: "一手戻す",
+    daily_cap: "今日の画面タイムが長めだよ。休もう！",
   },
   "zh-Hant": {
     title: "Kids Igo · 西遊圍棋",
@@ -98,6 +102,10 @@ const dict: Record<Locale, Record<string, string>> = {
     progress: "進度",
     next_stop: "下一站",
     journey: "取經之路",
+    continue_lesson: "繼續上一課",
+    show_libs: "顯示氣",
+    undo: "悔一手",
+    daily_cap: "今天螢幕時間有點長了，休息一下吧！",
   },
   en: {
     title: "Kids Igo · Journey Go",
@@ -147,6 +155,10 @@ const dict: Record<Locale, Record<string, string>> = {
     progress: "Progress",
     next_stop: "Next stop",
     journey: "Pilgrim path",
+    continue_lesson: "Continue",
+    show_libs: "Show liberties",
+    undo: "Undo",
+    daily_cap: "Screen time is getting long today — take a break!",
   },
 };
 

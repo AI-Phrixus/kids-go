@@ -11,6 +11,7 @@ import {
 } from "../../../packages/go-engine/src/index";
 import { api, type LessonDetail } from "./api";
 import { nextCareText } from "./care-rituals";
+import { friendlyError } from "./errors";
 import { EyeCareClock } from "./eyecare";
 import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
 import { mascotSvg } from "./mascot";
@@ -35,9 +36,16 @@ let coachBanner = "";
 let lastMove: { x: number; y: number } | null = null;
 let freeMode: FreeMode = "casual";
 let lessonTotal = 20;
+let showLibs = localStorage.getItem("kids-go-libs") === "1";
+let freeHistory: BoardState[] = [];
+let continueLessonId: string | null = null;
 
-const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20 });
+const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20, dailyCapMin: 60 });
 clock.onBreak = () => showBreak(true);
+clock.onDailyCap = () => {
+  coachBanner = t(locale, "daily_cap");
+  showBreak(true);
+};
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -47,9 +55,16 @@ function name(): string {
 
 function saveLocale() {
   localStorage.setItem("kids-go-locale", locale);
+  document.documentElement.lang = locale === "zh-Hant" ? "zh-Hant" : locale;
+}
+
+function errMsg(e: unknown): string {
+  const code = e instanceof Error ? e.message : String(e);
+  return friendlyError(code, locale);
 }
 
 async function boot() {
+  saveLocale();
   try {
     const me = await api.me();
     nickname = me.child?.nickname || "";
@@ -102,7 +117,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.4.1 · <span id="mins">0</span> min · Cloudflare Free
+      v0.5.0 · <span id="mins">0</span> min · Cloudflare Free
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle">${sfxEnabled() ? "🔊" : "🔇"}</button>
     </p>
@@ -172,7 +187,7 @@ function renderWelcome() {
         route = "map";
         render();
       } catch (e) {
-        showErr(String((e as Error).message));
+        showErr(errMsg(e));
       }
     });
   } else if (authTab === "parent") {
@@ -192,7 +207,7 @@ function renderWelcome() {
         route = "map";
         render();
       } catch (e) {
-        showErr(String((e as Error).message));
+        showErr(errMsg(e));
       }
     });
   } else {
@@ -215,7 +230,7 @@ function renderWelcome() {
         route = "map";
         render();
       } catch (e) {
-        showErr(String((e as Error).message));
+        showErr(errMsg(e));
       }
     });
     document.querySelector("#lp")!.addEventListener("click", async () => {
@@ -228,7 +243,7 @@ function renderWelcome() {
         route = "map";
         render();
       } catch (e) {
-        showErr(String((e as Error).message));
+        showErr(errMsg(e));
       }
     });
   }
@@ -249,6 +264,8 @@ async function renderMap() {
     lessonTotal = data.lessons.length;
     doneCount = data.lessons.filter((l) => l.status === "completed").length;
     progressPct = Math.round((doneCount / Math.max(1, lessonTotal)) * 100);
+    const cont = data.lessons.find((l) => l.status === "in_progress" && l.playable);
+    continueLessonId = cont?.id ?? data.lessons.find((l) => l.status !== "locked" && l.status !== "completed")?.id ?? null;
     lessonsHtml = data.lessons
       .map((l, i) => {
         const title = l.titles[locale] || l.titles.en || l.id;
@@ -292,10 +309,11 @@ async function renderMap() {
         <div class="progress-label">${t(locale, "progress")}: ${doneCount}/${lessonTotal} · ${progressPct}%</div>
         <div class="progress-bar"><div class="progress-fill" style="width:${progressPct}%"></div></div>
       </div>
-      <div class="map path">${lessonsHtml}</div>
       <div class="row">
+        ${continueLessonId ? `<button class="primary" id="continue">${t(locale, "continue_lesson")} ${continueLessonId}</button>` : ""}
         <button id="free">${t(locale, "free")}</button>
       </div>
+      <div class="map path">${lessonsHtml}</div>
     </div>
   `);
   document.querySelector("#logout")?.addEventListener("click", async () => {
@@ -313,6 +331,7 @@ async function renderMap() {
   });
   document.querySelector("#free")?.addEventListener("click", () => {
     board = createEmptyBoard(9);
+    freeHistory = [];
     humanMoves = 0;
     lastMove = null;
     freeMode = "casual";
@@ -320,6 +339,26 @@ async function renderMap() {
     route = "free";
     void api.track("free_play_start", { mode: freeMode });
     render();
+  });
+  document.querySelector("#continue")?.addEventListener("click", async () => {
+    if (!continueLessonId) return;
+    lessonId = continueLessonId;
+    try {
+      const res = await api.lesson(lessonId);
+      lesson = res.lesson;
+      stepIndex = 0;
+      phase = "steps";
+      humanMoves = 0;
+      completing = false;
+      statusMsg = "";
+      board = setupBoard(lesson);
+      lastMove = null;
+      route = "lesson";
+      void api.track("lesson_start", { lessonId });
+      render();
+    } catch (e) {
+      alert(errMsg(e));
+    }
   });
   document.querySelectorAll(".lesson:not(.locked)").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -471,9 +510,11 @@ function renderFree() {
         <button id="mode-r5" class="${freeMode === "race5" ? "primary" : ""}">${locale === "zh-Hant" ? "先吃5" : "Race5"}</button>
         <button id="mode-r10" class="${freeMode === "race10" ? "primary" : ""}">${locale === "zh-Hant" ? "先吃10" : "Race10"}</button>
         <button id="pass">${locale === "zh-Hant" ? "停一手" : "Pass"}</button>
+        <button id="undo" ${freeHistory.length ? "" : "disabled"}>${t(locale, "undo")}</button>
         <button id="reset">${locale === "zh-Hant" ? "重來" : "Reset"}</button>
+        <label class="check"><input type="checkbox" id="libs" ${showLibs ? "checked" : ""}/> ${t(locale, "show_libs")}</label>
       </div>
-      <p class="muted">${escapeHtml(raceLabel)} · B${board.captured.black} / W${board.captured.white}</p>
+      <p class="muted">${escapeHtml(raceLabel)} · B${board.captured.black} / W${board.captured.white} · ${board.toPlay === "black" ? "●" : "○"}</p>
       ${boardHtml(board, true)}
       <p class="bubble">${escapeHtml(statusMsg || `${name()} vs AI`)}</p>
       <button id="ask">${t(locale, "ask")}</button>
@@ -484,28 +525,23 @@ function renderFree() {
     void renderMap();
   });
   document.querySelector("#ask")?.addEventListener("click", () => void askCoach());
-  document.querySelector("#mode-casual")?.addEventListener("click", () => {
-    freeMode = "casual";
+  const resetBoard = (mode: FreeMode, msg: string) => {
+    freeMode = mode;
     board = createEmptyBoard(9);
+    freeHistory = [];
     lastMove = null;
-    statusMsg = "";
+    statusMsg = msg;
     render();
-  });
-  document.querySelector("#mode-r5")?.addEventListener("click", () => {
-    freeMode = "race5";
-    board = createEmptyBoard(9);
-    lastMove = null;
-    statusMsg = locale === "zh-Hant" ? "先吃滿 5 子獲勝！" : "First to 5 captures wins!";
-    render();
-  });
-  document.querySelector("#mode-r10")?.addEventListener("click", () => {
-    freeMode = "race10";
-    board = createEmptyBoard(9);
-    lastMove = null;
-    statusMsg = locale === "zh-Hant" ? "先吃滿 10 子獲勝！" : "First to 10 captures wins!";
-    render();
-  });
+  };
+  document.querySelector("#mode-casual")?.addEventListener("click", () => resetBoard("casual", ""));
+  document.querySelector("#mode-r5")?.addEventListener("click", () =>
+    resetBoard("race5", locale === "zh-Hant" ? "先吃滿 5 子獲勝！" : "First to 5 captures wins!"),
+  );
+  document.querySelector("#mode-r10")?.addEventListener("click", () =>
+    resetBoard("race10", locale === "zh-Hant" ? "先吃滿 10 子獲勝！" : "First to 10 captures wins!"),
+  );
   document.querySelector("#pass")?.addEventListener("click", () => {
+    freeHistory.push(structuredClone(board));
     board = pass(board);
     const mv = pickAiMove(board, 1);
     if (mv) {
@@ -518,10 +554,18 @@ function renderFree() {
     statusMsg = locale === "zh-Hant" ? "你停了一手，AI 繼續下。" : "You passed; AI moved.";
     render();
   });
-  document.querySelector("#reset")?.addEventListener("click", () => {
-    board = createEmptyBoard(9);
+  document.querySelector("#undo")?.addEventListener("click", () => {
+    const prev = freeHistory.pop();
+    if (!prev) return;
+    board = prev;
     lastMove = null;
-    statusMsg = "";
+    statusMsg = t(locale, "undo");
+    render();
+  });
+  document.querySelector("#reset")?.addEventListener("click", () => resetBoard(freeMode, ""));
+  document.querySelector("#libs")?.addEventListener("change", (e) => {
+    showLibs = (e.target as HTMLInputElement).checked;
+    localStorage.setItem("kids-go-libs", showLibs ? "1" : "0");
     render();
   });
   bindBoardClicks();
@@ -538,7 +582,12 @@ function boardHtml(b: BoardState, interactive: boolean): string {
       const stone = c === "black" ? "black" : c === "white" ? "white" : "";
       const last = lastMove && lastMove.x === x && lastMove.y === y ? " last" : "";
       const hoshi = !c && HOSHI_9.has(`${x},${y}`) ? " hoshi" : "";
-      return `<button class="cell ${stone}${last}${hoshi}" data-x="${x}" data-y="${y}" ${interactive ? "" : "disabled"}></button>`;
+      let libLabel = "";
+      if (showLibs && c) {
+        const libs = groupLiberties(b, x, y);
+        libLabel = `<span class="lib-num">${libs}</span>`;
+      }
+      return `<button class="cell ${stone}${last}${hoshi}" data-x="${x}" data-y="${y}" ${interactive ? "" : "disabled"}>${libLabel}</button>`;
     })
     .join("");
   return `<div class="board" style="grid-template-columns:repeat(${size},1fr)">${cells}</div>`;
@@ -599,8 +648,11 @@ function onTap(x: number, y: number) {
   if (route === "free") {
     const next = tryPlay(board, x, y);
     if (!next) return;
+    freeHistory.push(structuredClone(board));
+    if (freeHistory.length > 40) freeHistory.shift();
     board = next;
     lastMove = { x, y };
+    sfx.place();
     const target = freeMode === "race5" ? 5 : freeMode === "race10" ? 10 : 0;
     let win = target ? captureRaceWinner(board.captured, target) : null;
     if (win === "black") {

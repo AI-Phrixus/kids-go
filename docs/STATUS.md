@@ -1,6 +1,6 @@
 # 狀態快照
 
-> **版本**：v0.4.1  
+> **版本**：v0.5.0  
 > **更新**：2026-07-24  
 
 ## 網址
@@ -13,8 +13,15 @@
 
 GitHub：https://github.com/AI-Phrixus/kids-go  
 
-## 說明
+## v0.5 完善
 
-- 曾配 `igo.142857.eu.cc`，但部分網路對 `.eu.cc` 解析成 `0.0.0.0`，故改主域為 **go.tdtc.indevs.in**（已 curl 200）。  
-- Cloudflare Workers **Free** 已確認。  
-- 課綱 L01–L20 · CF 免費 AI 優先 · 護眼 · 家長摘要。  
+- PWA manifest + favicon  
+- 錯誤訊息三語友好  
+- 地圖「繼續上一課」  
+- 自由對弈：悔一手、顯示氣、每日螢幕軟上限提示  
+- 安全標頭 CSP / nosniff / frame-deny  
+- 引擎測試 `npm run test:engine`  
+
+## 產品目標
+
+見 [GOALS.md](./GOALS.md) — 主線已完成。  

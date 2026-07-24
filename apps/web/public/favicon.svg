@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#c45c26"/>
+  <circle cx="24" cy="32" r="10" fill="#1a1a1a"/>
+  <circle cx="42" cy="32" r="10" fill="#f5f5f5" stroke="#333" stroke-width="1"/>
+  <text x="32" y="58" text-anchor="middle" font-size="10" fill="#fff" font-family="sans-serif">GO</text>
+</svg>

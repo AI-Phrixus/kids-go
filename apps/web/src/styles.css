@@ -251,3 +251,30 @@ input[type="url"], input[type="password"] { width: 100%; }
 .welcome-hero h2 { margin-top: 0; }
 .privacy h3 { margin-top: 1rem; font-size: 1rem; }
 .privacy ul { line-height: 1.55; }
+
+.cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lib-num {
+  position: absolute;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #c45c26;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+  pointer-events: none;
+  z-index: 2;
+}
+.cell.black .lib-num { color: #7dffb3; text-shadow: 0 0 2px #000; }
+.cell.white .lib-num { color: #c45c26; }
+
+/* prevent double-tap zoom on board */
+.board { touch-action: manipulation; }
+button { touch-action: manipulation; }
+
+@media (max-width: 420px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .top { flex-direction: column; }
+}
