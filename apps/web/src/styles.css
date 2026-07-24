@@ -701,7 +701,123 @@ button { touch-action: manipulation; }
   h1 { font-size: 1.25rem; }
 }
 
+/* Soft fantasy decorations */
+.sky-ornament {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.5rem;
+  left: 0.5rem;
+  height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.spark {
+  position: absolute;
+  color: rgba(255, 220, 140, 0.75);
+  font-size: 0.85rem;
+  animation: twinkle 2.8s ease-in-out infinite;
+}
+.spark.s1 { left: 8%; top: 0.2rem; animation-delay: 0s; }
+.spark.s2 { left: 48%; top: 0.5rem; font-size: 0.7rem; animation-delay: 0.9s; color: rgba(255, 255, 255, 0.85); }
+.spark.s3 { right: 12%; top: 0.15rem; animation-delay: 1.6s; }
+@keyframes twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.tip-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: linear-gradient(100deg, #e8f6ff, #fff8ee 55%, #f0fae8);
+  border: 1.5px solid #c5e0d4;
+  border-radius: 18px;
+  padding: 0.65rem 0.9rem;
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  box-shadow: 0 6px 18px var(--shadow);
+}
+.tip-actions { display: flex; gap: 0.75rem; align-items: center; flex-shrink: 0; }
+.tip-actions a { color: var(--accent-deep); font-weight: 700; }
+
+.journey-deco {
+  text-align: center;
+  letter-spacing: 0.35em;
+  font-size: 0.95rem;
+  opacity: 0.75;
+  margin: -0.25rem 0 0.65rem;
+  user-select: none;
+}
+.card-journey { position: relative; overflow: hidden; }
+.card.fade-in, .lesson.fade-in, .welcome-hero.fade-in {
+  animation: fade-up 0.45s ease both;
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.welcome-hero { position: relative; overflow: hidden; }
+.welcome-glow {
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 70%;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 230, 160, 0.45), transparent 65%);
+  pointer-events: none;
+}
+.welcome-magic {
+  letter-spacing: 0.4em;
+  margin: 0.35rem 0 0;
+  opacity: 0.7;
+}
+
+.win-sparkles {
+  display: flex;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
+  font-size: 1.1rem;
+}
+.win-sparkles .sp {
+  display: inline-block;
+  animation: confetti 0.9s ease infinite alternate;
+  color: #e8a54b;
+}
+.win-sparkles .sp:nth-child(2) { animation-delay: 0.15s; color: #6ecf8a; }
+.win-sparkles .sp:nth-child(3) { animation-delay: 0.3s; color: #7eb8e0; }
+.win-sparkles .sp:nth-child(4) { animation-delay: 0.1s; color: #f0a070; }
+.win-sparkles .sp:nth-child(5) { animation-delay: 0.25s; color: #e8c46a; }
+.win-sparkles .sp:nth-child(6) { animation-delay: 0.4s; color: #c5a0e0; }
+@keyframes confetti {
+  from { transform: translateY(0) scale(0.9); opacity: 0.6; }
+  to { transform: translateY(-10px) scale(1.2); opacity: 1; }
+}
+
+.lesson .stop {
+  font-size: 0.85rem;
+  width: 1.85rem;
+  height: 1.85rem;
+  background: linear-gradient(160deg, #fff8ee, #e8f5e9);
+  color: inherit;
+  box-shadow: 0 2px 6px var(--shadow);
+  border: 1.5px solid #d4e8d0;
+}
+.lesson.done .stop {
+  background: linear-gradient(160deg, #e8ffe8, #c8f0d0);
+  border-color: #8ecf9a;
+}
+.lesson.open .stop {
+  background: linear-gradient(160deg, #fff0e0, #ffe8d0);
+  border-color: #f0c090;
+  box-shadow: 0 0 0 2px rgba(224, 122, 74, 0.15);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .mascot-bounce, body::before { animation: none; }
+  .mascot-bounce, .mascot-float, body::before, .spark, .win-sparkles .sp, .fade-in {
+    animation: none !important;
+  }
   .progress-fill, button, .ty-ch { transition: none; }
 }

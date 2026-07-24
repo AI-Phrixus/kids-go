@@ -133,6 +133,9 @@ const dict: Record<Locale, Record<string, string>> = {
     guide_title: "Kids Igo 完全ガイド",
     guide_intro: "はじめに読むと安心。目次をタップしてジャンプできます。",
     guide_top: "いちばん上へ",
+    tip_first:
+      "はじめて？「遊び方ガイド」を見てから西へ出発しよう。ともだちはなまえで追加できるよ。",
+    tip_ok: "わかった",
   },
   "zh-Hant": {
     title: "Kids Igo · 西遊圍棋",
@@ -266,6 +269,8 @@ const dict: Record<Locale, Record<string, string>> = {
     guide_title: "Kids Igo 完整使用說明",
     guide_intro: "建議先快速瀏覽。點目錄可跳到各章節。",
     guide_top: "回到頂部",
+    tip_first: "第一次來？先看「遊戲說明」，再開始西行。好友要用暱稱才能加喔～",
+    tip_ok: "知道了",
   },
   en: {
     title: "Kids Igo · Journey Go",
@@ -400,6 +405,8 @@ const dict: Record<Locale, Record<string, string>> = {
     guide_title: "Kids Igo complete guide",
     guide_intro: "Read this once, then jump via the table of contents.",
     guide_top: "Back to top",
+    tip_first: "First time? Open the guide, then start west. Friends join by nickname only.",
+    tip_ok: "Got it",
   },
 };
 

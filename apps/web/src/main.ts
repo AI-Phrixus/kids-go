@@ -16,6 +16,7 @@ import { EyeCareClock } from "./eyecare";
 import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
 import { mascotSvg } from "./mascot";
 import { setSfxEnabled, sfx, sfxEnabled } from "./sfx";
+import { skyOrnamentHtml, stopIcon, winSparklesHtml } from "./decor";
 import { guideBodyHtml, guideTocHtml } from "./guide";
 import { checkTyping, pickPracticePhrase, targetHtml } from "./typing";
 
@@ -67,6 +68,7 @@ let typePractice = localStorage.getItem("kids-go-type") === "1";
 let typeTarget = "";
 let typeWins = Number(localStorage.getItem("kids-go-type-wins") || "0") || 0;
 let postureTip = "";
+let tipDismissed = localStorage.getItem("kids-go-tip") === "1";
 
 const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20, dailyCapMin: 60 });
 clock.onBreak = () => showBreak(true);
@@ -145,6 +147,7 @@ function shell(body: string) {
       ? `<p class="banner offline-banner" role="status">${t(locale, "offline")}</p>`
       : "";
   app.innerHTML = `
+    ${skyOrnamentHtml()}
     <header class="top">
       <div>
         <h1>${t(locale, "title")}</h1>
@@ -159,6 +162,17 @@ function shell(body: string) {
       </label>
     </header>
     ${offlineBar}
+    ${
+      !tipDismissed && route === "map"
+        ? `<div class="tip-banner" role="status">
+            <span>${t(locale, "tip_first")}</span>
+            <span class="tip-actions">
+              <a href="#" id="tip-guide">${t(locale, "guide")}</a>
+              <button type="button" class="linkish" id="tip-dismiss">${t(locale, "tip_ok")}</button>
+            </span>
+          </div>`
+        : ""
+    }
     ${body}
     <div class="overlay hidden" id="break" role="dialog" aria-modal="true" aria-labelledby="care-title">
       <div class="panel">
@@ -170,7 +184,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.7.4 · <span id="mins">0</span> min · free AI rotate
+      v0.7.5 · <span id="mins">0</span> min · free AI rotate
       · <a href="#" id="help-link">${t(locale, "guide")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
@@ -190,6 +204,17 @@ function shell(body: string) {
     render();
   });
   document.querySelector("#help-link")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    route = "help";
+    pushNav("help");
+    render();
+  });
+  document.querySelector("#tip-dismiss")?.addEventListener("click", () => {
+    tipDismissed = true;
+    localStorage.setItem("kids-go-tip", "1");
+    document.querySelector(".tip-banner")?.remove();
+  });
+  document.querySelector("#tip-guide")?.addEventListener("click", (e) => {
     e.preventDefault();
     route = "help";
     pushNav("help");
@@ -225,11 +250,13 @@ function bindEnterSubmit(btnId: string) {
 
 function renderWelcome() {
   shell(`
-    <div class="card welcome-hero">
+    <div class="card welcome-hero fade-in">
+      <div class="welcome-glow" aria-hidden="true"></div>
       <div class="hero-row">${mascotSvg("idle")}
         <div>
           <h2>${t(locale, "welcome")}</h2>
           <p class="muted">${t(locale, "welcome_tag")}</p>
+          <p class="welcome-magic muted">✦ ☁️ 🌿 ✨</p>
         </div>
       </div>
       <div class="tabs" role="tablist">
@@ -401,8 +428,8 @@ async function renderMap() {
         const stars = "★".repeat(l.stars) + "☆".repeat(Math.max(0, 3 - l.stars));
         const cls = locked ? "locked" : done ? "done" : "open";
         return `
-          <button class="lesson ${cls}" data-id="${l.id}" ${locked ? "disabled" : ""} aria-label="${escapeHtml(l.id)} ${escapeHtml(title)}">
-            <span class="stop">${i + 1}</span>
+          <button class="lesson ${cls} fade-in" style="animation-delay:${Math.min(i, 12) * 0.04}s" data-id="${l.id}" ${locked ? "disabled" : ""} aria-label="${escapeHtml(l.id)} ${escapeHtml(title)}">
+            <span class="stop" title="">${stopIcon(i)}</span>
             <span class="lid">${l.id}</span>
             <span class="lt">${escapeHtml(title)}</span>
             <span class="ls">${locked ? t(locale, "locked") : done ? stars : "▶"}</span>
@@ -423,7 +450,8 @@ async function renderMap() {
   }
 
   shell(`
-    <div class="card">
+    <div class="card card-journey fade-in">
+      <div class="journey-deco" aria-hidden="true">🍃 · ☁️ · 🗻 · 🌿</div>
       <div class="row between">
         <h2>${t(locale, "journey")} · ${escapeHtml(name())}</h2>
         <div class="row">
@@ -577,6 +605,7 @@ function renderLesson() {
       <p class="bubble" role="status">${escapeHtml(statusMsg)}</p>`;
   } else {
     mid = `
+      ${winSparklesHtml()}
       <div class="win-hero">${mascotSvg("win")}
         <div>
           <h2 class="win">${t(locale, "win")}</h2>
