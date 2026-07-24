@@ -1,23 +1,32 @@
 # 自訂域名
 
-## 已配置
+## 狀態
 
-| 項 | 值 |
-|----|-----|
-| 子域 | **igo.142857.eu.cc** |
-| Zone | `142857.eu.cc`（CF 帳戶內 active） |
-| wrangler | `routes = [{ pattern = "igo.142857.eu.cc/*", zone_name = "142857.eu.cc" }]` |
-| 原 workers.dev | 仍保留：https://kids-go.phrixusjhon.workers.dev |
+| 項 | 狀態 |
+|----|------|
+| Worker 路由 | ✅ 已部署 `igo.142857.eu.cc/*` → zone `142857.eu.cc` |
+| DNS CNAME | ⚠️ 需你在 Dashboard **手動加一條**（OAuth 無 DNS 寫權限） |
+| workers.dev | ✅ https://kids-go.phrixusjhon.workers.dev 已可用 |
 
-部署後若 DNS 自動綁定成功，打開：
+## 請你完成（約 1 分鐘）
 
-**https://igo.142857.eu.cc**
+1. 打開 [Cloudflare Dashboard](https://dash.cloudflare.com) → 選 zone **142857.eu.cc** → **DNS**  
+2. **Add record**：
+   - Type: **CNAME**
+   - Name: **igo**
+   - Target: **kids-go.phrixusjhon.workers.dev**
+   - Proxy: **Proxied**（橘雲）  
+3. 儲存後等 1–2 分鐘，訪問：**https://igo.142857.eu.cc**
 
-## 若未生效
+也可：Workers → **kids-go** → **Triggers** → **Custom Domains** → Add `igo.142857.eu.cc`（若介面提供一鍵綁定）。
 
-1. Dashboard → Workers → kids-go → Triggers → Custom Domains → 新增 `igo.142857.eu.cc`  
-2. 或 DNS 手動：CNAME `igo` → `kids-go.phrixusjhon.workers.dev`（Proxied）  
+## 程式配置（已提交）
 
-## 換域名
+`wrangler.toml`:
 
-改 `wrangler.toml` 的 `routes` 後 `npm run deploy`。  
+```toml
+workers_dev = true
+[[routes]]
+pattern = "igo.142857.eu.cc/*"
+zone_name = "142857.eu.cc"
+```

@@ -7,8 +7,8 @@
 
 | | |
 |--|--|
-| **自訂域** | https://igo.142857.eu.cc |
-| workers.dev | https://kids-go.phrixusjhon.workers.dev |
+| **自訂域** | https://igo.142857.eu.cc（路由已配；**DNS CNAME 需你在面板加一條**，見 DOMAIN.md） |
+| workers.dev | ✅ https://kids-go.phrixusjhon.workers.dev |
 | GitHub | https://github.com/AI-Phrixus/kids-go |
 
 ## 本版（四輪收官）
