@@ -17,6 +17,8 @@ const ALLOWED = new Set([
 
 analytics.post("/events", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
+  // Require login — block anonymous DB spam
+  if (!sess?.user) return c.json({ error: "unauthorized" }, 401);
   let body: { event?: string; payload?: unknown } = {};
   try {
     body = await c.req.json();

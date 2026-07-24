@@ -155,6 +155,9 @@ for (const lv of [0, 1, 2] as const) {
 assert(captureRaceWinner({ black: 5, white: 2 }, 5) === "black", "race black");
 assert(captureRaceWinner({ black: 2, white: 5 }, 5) === "white", "race white");
 assert(captureRaceWinner({ black: 4, white: 4 }, 5) === null, "race none");
+assert(captureRaceWinner({ black: 6, white: 5 }, 5) === "black", "both over black leads");
+assert(captureRaceWinner({ black: 5, white: 7 }, 5) === "white", "both over white leads");
+assert(captureRaceWinner({ black: 5, white: 5 }, 5) === null, "both equal draw");
 
 // AI prefers capture when available (level 1)
 {

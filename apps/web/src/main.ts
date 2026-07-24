@@ -151,7 +151,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.6.2 · <span id="mins">0</span> min · free AI rotate
+      v0.6.3 · <span id="mins">0</span> min · free AI rotate
       · <a href="#" id="help-link">${t(locale, "help")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
@@ -237,7 +237,7 @@ function renderWelcome() {
       try {
         const nick = (document.querySelector("#nick") as HTMLInputElement).value.trim();
         const pin = (document.querySelector("#pin") as HTMLInputElement).value.trim();
-        if (!nick || !/^\d{4,6}$/.test(pin)) {
+        if (!nick || /[<>&`"\\/]/.test(nick) || !/^\d{4,6}$/.test(pin)) {
           showErr(friendlyError("invalid_input", locale));
           btn.disabled = false;
           return;

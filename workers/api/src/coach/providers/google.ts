@@ -38,9 +38,14 @@ export function createGoogleProvider(opts: {
       const data = (await res.json()) as {
         candidates?: { content?: { parts?: { text?: string }[] } }[];
       };
-      const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-      if (!text) throw new Error("empty gemini response");
-      return text;
+      // Skip thought-only parts; only join real text
+      const text =
+        data.candidates?.[0]?.content?.parts
+          ?.map((p) => (typeof p.text === "string" ? p.text : ""))
+          .filter(Boolean)
+          .join("") ?? "";
+      if (!text.trim()) throw new Error("empty gemini response");
+      return text.trim();
     },
   };
 }

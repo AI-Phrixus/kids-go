@@ -11,7 +11,7 @@ import settings from "./routes/settings";
 import { loadSession } from "./session";
 import type { Env } from "./types";
 
-const VERSION = "0.6.2";
+const VERSION = "0.6.3";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -91,7 +91,15 @@ app.route("/api", analytics);
 
 app.post("/api/coach", async (c) => {
   const ip = c.req.header("cf-connecting-ip") || "local";
-  if (!coachRateOk(`coach:${ip}`, 30)) {
+  if (!coachRateOk(`coach:${ip}`, 20)) {
+    return c.json({ error: "rate_limited" }, 429);
+  }
+  // Require login — prevents free-tier AI quota theft
+  const { sess, cfg } = await loadUserAiConfig(c.env, c.req.header("Cookie"));
+  if (!sess?.child) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  if (!coachRateOk(`coach-user:${sess.user.id}`, 40, 60_000)) {
     return c.json({ error: "rate_limited" }, 429);
   }
   let body: Partial<CoachRequest>;
@@ -103,17 +111,19 @@ app.post("/api/coach", async (c) => {
   const locale =
     body.locale === "ja" || body.locale === "zh-Hant" || body.locale === "en"
       ? body.locale
-      : "en";
-  const { cfg } = await loadUserAiConfig(c.env, c.req.header("Cookie"));
+      : (sess.child.preferred_locale as "ja" | "zh-Hant" | "en") || "en";
+  // Prefer session nickname over client-supplied name (anti-spoof / prompt abuse)
+  const childName = (sess.child.nickname || body.childName || "friend").toString().slice(0, 12);
   const req: CoachRequest = {
     tone: body.tone ?? "hint",
     speaker: body.speaker ?? "wukong",
     locale,
-    childName: (body.childName ?? "").toString().slice(0, 12) || "friend",
-    lessonId: body.lessonId,
-    boardSummary: body.boardSummary,
-    recentMoves: body.recentMoves,
-    storyBeat: body.storyBeat,
+    childName,
+    lessonId: typeof body.lessonId === "string" ? body.lessonId.slice(0, 8) : undefined,
+    boardSummary:
+      typeof body.boardSummary === "string" ? body.boardSummary.slice(0, 400) : undefined,
+    recentMoves: Array.isArray(body.recentMoves) ? body.recentMoves.slice(0, 20) : undefined,
+    storyBeat: typeof body.storyBeat === "string" ? body.storyBeat.slice(0, 200) : undefined,
   };
   const result = await runCoach(req, c.env, cfg);
   return c.json(result);

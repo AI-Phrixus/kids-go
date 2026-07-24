@@ -8,6 +8,7 @@ import {
   sessionCookie,
   setSessionChild,
 } from "../session";
+import { sanitizeNickname } from "../sanitize";
 import type { Env, Locale } from "../types";
 
 const auth = new Hono<{ Bindings: Env }>();
@@ -46,9 +47,9 @@ auth.post("/register/parent", async (c) => {
   }>();
   const email = (body.email ?? "").trim().toLowerCase();
   const password = body.password ?? "";
-  const nick = (body.childNickname ?? "").trim().slice(0, 12);
+  const nick = sanitizeNickname(body.childNickname);
   const locale = okLocale(body.locale);
-  if (!email || password.length < 6 || !nick) {
+  if (!email || password.length < 6 || !nick || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return c.json({ error: "invalid_input" }, 400);
   }
   const exists = await c.env.DB.prepare("SELECT id FROM users WHERE email = ?")
@@ -84,7 +85,7 @@ auth.post("/register/quick", async (c) => {
   const ip = c.req.header("cf-connecting-ip") || "local";
   if (!rateLimit(`reg:${ip}`, 10)) return c.json({ error: "rate_limited" }, 429);
   const body = await c.req.json<{ nickname?: string; pin?: string; locale?: string }>();
-  const nick = (body.nickname ?? "").trim().slice(0, 12);
+  const nick = sanitizeNickname(body.nickname);
   const pin = (body.pin ?? "").trim();
   const locale = okLocale(body.locale);
   if (!nick || !/^\d{4,6}$/.test(pin)) {
@@ -198,7 +199,7 @@ auth.post("/children", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
   if (!sess) return c.json({ error: "unauthorized" }, 401);
   const body = await c.req.json<{ nickname?: string; locale?: string }>();
-  const nick = (body.nickname ?? "").trim().slice(0, 12);
+  const nick = sanitizeNickname(body.nickname);
   if (!nick) return c.json({ error: "invalid_input" }, 400);
   const locale = okLocale(body.locale ?? sess.user.preferred_locale);
   const childId = uid();
