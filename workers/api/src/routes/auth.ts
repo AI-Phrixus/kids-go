@@ -38,7 +38,8 @@ function okLocale(v: unknown): Locale {
 
 auth.post("/register/parent", async (c) => {
   const ip = c.req.header("cf-connecting-ip") || "local";
-  if (!rateLimit(`reg:${ip}`, 10)) return c.json({ error: "rate_limited" }, 429);
+  // Shared NAT (school/home) may share one IP — keep soft but not too tight
+  if (!rateLimit(`reg:${ip}`, 30, 60_000)) return c.json({ error: "rate_limited" }, 429);
   const body = await c.req.json<{
     email?: string;
     password?: string;
@@ -83,7 +84,7 @@ auth.post("/register/parent", async (c) => {
 
 auth.post("/register/quick", async (c) => {
   const ip = c.req.header("cf-connecting-ip") || "local";
-  if (!rateLimit(`reg:${ip}`, 10)) return c.json({ error: "rate_limited" }, 429);
+  if (!rateLimit(`reg:${ip}`, 30, 60_000)) return c.json({ error: "rate_limited" }, 429);
   const body = await c.req.json<{ nickname?: string; pin?: string; locale?: string }>();
   const nick = sanitizeNickname(body.nickname);
   const pin = (body.pin ?? "").trim();
@@ -122,7 +123,7 @@ auth.post("/register/quick", async (c) => {
 
 auth.post("/login", async (c) => {
   const ip = c.req.header("cf-connecting-ip") || "local";
-  if (!rateLimit(`login:${ip}`, 30)) return c.json({ error: "rate_limited" }, 429);
+  if (!rateLimit(`login:${ip}`, 40, 60_000)) return c.json({ error: "rate_limited" }, 429);
   const body = await c.req.json<{
     mode?: "parent" | "quick";
     email?: string;

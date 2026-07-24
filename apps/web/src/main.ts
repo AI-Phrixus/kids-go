@@ -184,7 +184,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.7.5 · <span id="mins">0</span> min · free AI rotate
+      v0.7.6 · <span id="mins">0</span> min · free AI rotate
       · <a href="#" id="help-link">${t(locale, "guide")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>

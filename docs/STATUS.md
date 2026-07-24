@@ -76,3 +76,9 @@ GitHub：https://github.com/AI-Phrixus/kids-go
 ## 產品目標
 
 見 [GOALS.md](./GOALS.md) — 主線已完成。  
+
+## v0.7.6 三輪對抗測試
+
+- 腳本 `scripts/adversarial-3rounds.sh` 連續 3 輪 **PASS=132 FAIL=0**
+- 註冊限流 10→30/分（校園共用 IP）
+- 覆蓋：未授權、XSS 暱稱、跳關、好友盜讀、訊息過濾、BYOK http、CSP
