@@ -175,10 +175,10 @@ export async function getCoachStatus(
     }
   }
   const slots = buildFreeFirstSlots(effective, userCfg, preferByok);
-  const freeTier: string[] = [];
-  if (env.GROQ_API_KEY) freeTier.push("groq");
-  if (env.OPENROUTER_API_KEY) freeTier.push("openrouter");
-  if (env.GOOGLE_API_KEY) freeTier.push("google");
+  const freeProviders: string[] = [];
+  if (env.GROQ_API_KEY) freeProviders.push("groq");
+  if (env.OPENROUTER_API_KEY) freeProviders.push("openrouter");
+  if (env.GOOGLE_API_KEY) freeProviders.push("google");
 
   const chain = forceNone
     ? "static"
@@ -192,13 +192,13 @@ export async function getCoachStatus(
     dayUtc: day,
     mode: effective.COACH_PROVIDER || "auto",
     chain,
-    freePriority: freePriorityLabel(slots) || freeTier.join(" → ") || "none",
+    freePriority: freePriorityLabel(slots) || freeProviders.join(" → ") || "none",
     cfSoftMaxCalls: maxCalls,
     cfSuccessToday: q.cf_success,
     cfQuotaHitsToday: q.cf_fail_quota,
     byokConfigured: slots.some((s) => s.tier === "byok"),
-    freeTierConfigured: freeTiers.length > 0,
-    freeTierProviders: freeTiers,
+    freeTierConfigured: freeProviders.length > 0,
+    freeTierProviders: freeProviders,
     workersAiBound: !!env.AI,
     preferByok,
     freeFirst,
