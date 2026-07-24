@@ -81,13 +81,21 @@ export function tryPlay(state: BoardState, x: number, y: number): BoardState | n
     captured: { ...state.captured },
   };
 
-  // Capture opponent groups with 0 liberties
+  // Capture opponent groups with 0 liberties (dedupe groups via seen set)
   const opp = opposite(color);
   const capturedPoints: Point[] = [];
+  const capturedSeen = new Set<string>();
   for (const n of neighbors(size, x, y)) {
     if (next.grid[idx(size, n.x, n.y)] !== opp) continue;
+    const gkey = `${n.x},${n.y}`;
+    if (capturedSeen.has(gkey)) continue;
     if (groupLiberties(next, n.x, n.y) === 0) {
-      removeGroup(next, n.x, n.y, capturedPoints);
+      const bag: Point[] = [];
+      removeGroup(next, n.x, n.y, bag);
+      for (const p of bag) {
+        capturedSeen.add(`${p.x},${p.y}`);
+        capturedPoints.push(p);
+      }
     }
   }
 
@@ -97,11 +105,26 @@ export function tryPlay(state: BoardState, x: number, y: number): BoardState | n
   if (color === "black") next.captured.black += capturedPoints.length;
   else next.captured.white += capturedPoints.length;
 
-  // Simple single-stone ko
+  // Simple ko: only when capture exactly one stone AND we played a single-stone "snapback" shape
+  // (standard: last move was single-stone capture of single stone)
   if (capturedPoints.length === 1) {
     const only = capturedPoints[0]!;
-    // if the play was single-stone fill of ko shape — mark return point
-    next.ko = `${only.x},${only.y}`;
+    // count stones in our group at (x,y) — simple ko if we are single stone
+    let ourSize = 0;
+    const stack = [{ x, y }];
+    const seen = new Set<string>([`${x},${y}`]);
+    while (stack.length) {
+      const p = stack.pop()!;
+      ourSize++;
+      for (const n of neighbors(size, p.x, p.y)) {
+        const key = `${n.x},${n.y}`;
+        if (next.grid[idx(size, n.x, n.y)] === color && !seen.has(key)) {
+          seen.add(key);
+          stack.push(n);
+        }
+      }
+    }
+    if (ourSize === 1) next.ko = `${only.x},${only.y}`;
   }
 
   next.toPlay = opp;

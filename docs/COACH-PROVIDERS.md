@@ -21,17 +21,29 @@
 
 > 若你升級到 **Workers Paid**，超過免費 Neuron 可能計費。本專案設計假設你保持 Free。
 
-## 環境變數
+## 在網頁填寫第三方 URL / Key（推薦）
+
+登入後 → 西行地圖 → **「設定（第三方 AI）」**：
+
+| 欄位 | 說明 |
+|------|------|
+| **Base URL** | 例如 `https://api.x.ai/v1`、`https://api.groq.com/openai/v1` |
+| **API Key** | 供應商金鑰（只存你的帳號 D1，回傳只顯示末四位） |
+| **Model** | 例如 `grok-4.5`、`llama-3.1-8b-instant` |
+| **模式** | `auto` / `openai_compatible` / `xai` / `google` / … |
+| **略過 CF** | 勾選後優先打第三方，不先用 Workers AI |
+| **預設範本** | 一鍵填 xAI / Groq / OpenAI 等 URL |
+
+API：`GET/PUT /api/settings/ai` · `POST /api/settings/ai/test`
+
+## 環境變數（部署級，可選）
 
 見 `.env.example` · `wrangler.toml [vars]`。
 
 ```bash
-# 第三方 Key（部署後）
+# 全域 secrets（所有用戶共用；一般用網頁設定即可）
 npx wrangler secret put XAI_API_KEY
-# 或
-npx wrangler secret put GOOGLE_API_KEY
-# 或
-npx wrangler secret put AI_API_KEY
+# 或 GOOGLE_API_KEY / AI_API_KEY
 ```
 
 `wrangler.toml` 需有：

@@ -8,7 +8,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error((data as { error?: string }).error || res.statusText);
+    const err = new Error((data as { error?: string }).error || res.statusText || "request_failed");
     (err as Error & { status: number }).status = res.status;
     throw err;
   }
@@ -76,6 +76,38 @@ export const api = {
       byokConfigured: boolean;
       workersAiBound: boolean;
     }>(`/api/coach/status?locale=${encodeURIComponent(locale)}`),
+  getAiSettings: () =>
+    req<{
+      config: {
+        provider: string;
+        baseUrl: string;
+        model: string;
+        preferByok: boolean;
+        hasApiKey: boolean;
+        apiKeyHint: string;
+      };
+      presets: {
+        id: string;
+        label: string;
+        baseUrl: string;
+        model: string;
+        provider: string;
+      }[];
+      hints: Record<string, string>;
+    }>("/api/settings/ai"),
+  saveAiSettings: (body: {
+    provider?: string;
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+    preferByok?: boolean;
+    clearApiKey?: boolean;
+  }) => req("/api/settings/ai", { method: "PUT", body: JSON.stringify(body) }),
+  testAiSettings: () =>
+    req<{ ok: boolean; sample?: string; error?: string }>("/api/settings/ai/test", {
+      method: "POST",
+      body: "{}",
+    }),
 };
 
 export type LessonDetail = {

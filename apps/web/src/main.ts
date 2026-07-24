@@ -11,7 +11,7 @@ import { api, type LessonDetail } from "./api";
 import { EyeCareClock } from "./eyecare";
 import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
 
-type Route = "welcome" | "map" | "lesson" | "free";
+type Route = "welcome" | "map" | "lesson" | "free" | "settings";
 
 let locale: Locale = (localStorage.getItem("kids-go-locale") as Locale) || "zh-Hant";
 let route: Route = "welcome";
@@ -24,6 +24,8 @@ let humanMoves = 0;
 let phase: "steps" | "battle" | "done" = "steps";
 let statusMsg = "";
 let authTab: "quick" | "parent" | "login" = "quick";
+let completing = false;
+let coachBanner = "";
 
 const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20 });
 clock.onBreak = () => showBreak(true);
@@ -58,6 +60,7 @@ function render() {
   else if (route === "map") void renderMap();
   else if (route === "lesson") renderLesson();
   else if (route === "free") renderFree();
+  else if (route === "settings") void renderSettings();
   bindBreak();
 }
 
@@ -85,13 +88,22 @@ function shell(body: string) {
         <button class="primary" id="care-done" disabled>${t(locale, "care_done")}</button>
       </div>
     </div>
-    <p class="footer muted">v0.1 · <span id="mins">0</span> min · Cloudflare Free</p>
+    ${coachBanner ? `<p class="banner muted">${escapeHtml(coachBanner)}</p>` : ""}
+    <p class="footer muted">v0.1.2 · <span id="mins">0</span> min · Cloudflare Free</p>
   `;
   document.querySelector("#locale")?.addEventListener("change", (e) => {
     locale = (e.target as HTMLSelectElement).value as Locale;
     saveLocale();
     render();
   });
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function renderWelcome() {
@@ -220,14 +232,27 @@ async function renderMap() {
     return;
   }
 
+  // refresh coach quota banner
+  try {
+    const st = await api.coachStatus(locale);
+    coachBanner = st.reminder || "";
+  } catch {
+    coachBanner = "";
+  }
+
   shell(`
     <div class="card">
       <div class="row between">
-        <h2>${t(locale, "map")} · ${name()}</h2>
-        <button id="logout">${t(locale, "logout")}</button>
+        <h2>${t(locale, "map")} · ${escapeHtml(name())}</h2>
+        <div class="row">
+          <button id="settings">${t(locale, "settings")}</button>
+          <button id="logout">${t(locale, "logout")}</button>
+        </div>
       </div>
       <div class="map">${lessonsHtml}</div>
-      <button id="free">${t(locale, "free")}</button>
+      <div class="row">
+        <button id="free">${t(locale, "free")}</button>
+      </div>
     </div>
   `);
   document.querySelector("#logout")?.addEventListener("click", async () => {
@@ -235,23 +260,35 @@ async function renderMap() {
     route = "welcome";
     render();
   });
+  document.querySelector("#settings")?.addEventListener("click", () => {
+    route = "settings";
+    render();
+  });
   document.querySelector("#free")?.addEventListener("click", () => {
     board = createEmptyBoard(9);
+    humanMoves = 0;
+    statusMsg = "";
     route = "free";
     render();
   });
   document.querySelectorAll(".lesson:not(.locked)").forEach((btn) => {
     btn.addEventListener("click", async () => {
       lessonId = (btn as HTMLElement).dataset.id!;
-      const res = await api.lesson(lessonId);
-      lesson = res.lesson;
-      stepIndex = 0;
-      phase = "steps";
-      humanMoves = 0;
-      statusMsg = "";
-      board = setupBoard(lesson);
-      route = "lesson";
-      render();
+      try {
+        const res = await api.lesson(lessonId);
+        lesson = res.lesson;
+        stepIndex = 0;
+        phase = "steps";
+        humanMoves = 0;
+        completing = false;
+        statusMsg = "";
+        board = setupBoard(lesson);
+        route = "lesson";
+        render();
+      } catch (e) {
+        statusMsg = String((e as Error).message);
+        alert(statusMsg);
+      }
     });
   });
 }
@@ -535,7 +572,10 @@ function isAtariTarget(x: number, y: number, pts: [number, number][]): boolean {
 }
 
 async function completeLesson(stars: number) {
-  if (!lesson) return;
+  if (!lesson || completing || phase === "done") return;
+  completing = true;
+  phase = "done";
+  render();
   try {
     await api.complete(lesson.id, stars);
     await api.saveGame({
@@ -553,15 +593,147 @@ async function completeLesson(stars: number) {
         childName: name(),
         lessonId: lesson.id,
       });
-      statusMsg = c.say;
+      statusMsg = c.reminder ? `${c.say} —— ${c.reminder}` : c.say;
     } catch {
       statusMsg = t(locale, "win");
     }
   } catch {
     statusMsg = t(locale, "win");
   }
-  phase = "done";
+  completing = false;
   render();
+}
+
+async function renderSettings() {
+  let body = `<p class="muted">…</p>`;
+  try {
+    const data = await api.getAiSettings();
+    const c = data.config;
+    const hint =
+      locale === "zh-Hant"
+        ? data.hints.zhHant
+        : locale === "ja"
+          ? data.hints.ja
+          : data.hints.en;
+    const presets = data.presets
+      .map(
+        (p) =>
+          `<option value="${p.id}" data-url="${escapeHtml(p.baseUrl)}" data-model="${escapeHtml(p.model)}" data-provider="${escapeHtml(p.provider)}">${escapeHtml(p.label)}</option>`,
+      )
+      .join("");
+    body = `
+      <p class="muted">${escapeHtml(hint || "")}</p>
+      <label>${t(locale, "preset")}
+        <select id="preset"><option value="">—</option>${presets}</select>
+      </label>
+      <label>${t(locale, "provider")}
+        <select id="provider">
+          <option value="auto" ${c.provider === "auto" ? "selected" : ""}>auto (CF free → BYOK → static)</option>
+          <option value="workers_ai" ${c.provider === "workers_ai" ? "selected" : ""}>workers_ai only</option>
+          <option value="openai_compatible" ${c.provider === "openai_compatible" ? "selected" : ""}>openai_compatible</option>
+          <option value="xai" ${c.provider === "xai" ? "selected" : ""}>xai</option>
+          <option value="google" ${c.provider === "google" ? "selected" : ""}>google</option>
+          <option value="none" ${c.provider === "none" ? "selected" : ""}>none (static)</option>
+        </select>
+      </label>
+      <label>${t(locale, "base_url")}
+        <input id="baseUrl" type="url" placeholder="https://api.x.ai/v1" value="${escapeHtml(c.baseUrl)}" />
+      </label>
+      <label>${t(locale, "api_key")}
+        <input id="apiKey" type="password" autocomplete="off" placeholder="${escapeHtml(c.apiKeyHint || "sk-…")}" />
+      </label>
+      <label>${t(locale, "model")}
+        <input id="model" value="${escapeHtml(c.model)}" placeholder="grok-4.5 / llama-3.1-8b-instant" />
+      </label>
+      <label class="check">
+        <input type="checkbox" id="preferByok" ${c.preferByok ? "checked" : ""} />
+        ${t(locale, "prefer_byok")}
+      </label>
+      <div class="row">
+        <button class="primary" id="saveAi">${t(locale, "save")}</button>
+        <button id="testAi">${t(locale, "test_ai")}</button>
+        <button id="clearKey">${t(locale, "clear_key")}</button>
+        <button id="home">${t(locale, "home")}</button>
+      </div>
+      <p class="err" id="setMsg"></p>
+    `;
+  } catch (e) {
+    body = `<p class="err">${escapeHtml(String((e as Error).message))}</p>
+      <button id="home">${t(locale, "home")}</button>`;
+  }
+
+  shell(`
+    <div class="card">
+      <h2>${t(locale, "settings_title")}</h2>
+      ${body}
+    </div>
+  `);
+
+  document.querySelector("#home")?.addEventListener("click", () => {
+    route = "map";
+    void renderMap();
+  });
+  document.querySelector("#preset")?.addEventListener("change", (e) => {
+    const opt = (e.target as HTMLSelectElement).selectedOptions[0];
+    if (!opt || !opt.value) return;
+    const url = opt.dataset.url || "";
+    const model = opt.dataset.model || "";
+    const provider = opt.dataset.provider || "openai_compatible";
+    const bu = document.querySelector("#baseUrl") as HTMLInputElement | null;
+    const md = document.querySelector("#model") as HTMLInputElement | null;
+    const pr = document.querySelector("#provider") as HTMLSelectElement | null;
+    if (bu) bu.value = url;
+    if (md) md.value = model;
+    if (pr) pr.value = provider;
+  });
+  document.querySelector("#saveAi")?.addEventListener("click", async () => {
+    const msg = document.querySelector("#setMsg");
+    try {
+      await api.saveAiSettings({
+        provider: (document.querySelector("#provider") as HTMLSelectElement).value,
+        baseUrl: (document.querySelector("#baseUrl") as HTMLInputElement).value.trim(),
+        apiKey: (document.querySelector("#apiKey") as HTMLInputElement).value,
+        model: (document.querySelector("#model") as HTMLInputElement).value.trim(),
+        preferByok: (document.querySelector("#preferByok") as HTMLInputElement).checked,
+      });
+      if (msg) msg.textContent = t(locale, "saved");
+      // clear password field after save
+      const k = document.querySelector("#apiKey") as HTMLInputElement | null;
+      if (k) k.value = "";
+    } catch (err) {
+      if (msg) msg.textContent = String((err as Error).message);
+    }
+  });
+  document.querySelector("#clearKey")?.addEventListener("click", async () => {
+    const msg = document.querySelector("#setMsg");
+    try {
+      await api.saveAiSettings({ clearApiKey: true });
+      if (msg) msg.textContent = t(locale, "saved");
+    } catch (err) {
+      if (msg) msg.textContent = String((err as Error).message);
+    }
+  });
+  document.querySelector("#testAi")?.addEventListener("click", async () => {
+    const msg = document.querySelector("#setMsg");
+    if (msg) msg.textContent = "…";
+    try {
+      // save first if fields filled
+      const key = (document.querySelector("#apiKey") as HTMLInputElement)?.value;
+      if (key) {
+        await api.saveAiSettings({
+          provider: (document.querySelector("#provider") as HTMLSelectElement).value,
+          baseUrl: (document.querySelector("#baseUrl") as HTMLInputElement).value.trim(),
+          apiKey: key,
+          model: (document.querySelector("#model") as HTMLInputElement).value.trim(),
+          preferByok: (document.querySelector("#preferByok") as HTMLInputElement).checked,
+        });
+      }
+      const r = await api.testAiSettings();
+      if (msg) msg.textContent = r.ok ? `OK: ${r.sample || "ok"}` : r.error || "fail";
+    } catch (err) {
+      if (msg) msg.textContent = String((err as Error).message);
+    }
+  });
 }
 
 async function askCoach() {

@@ -1,12 +1,15 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { parseAiConfig } from "./ai-config";
 import type { CoachRequest } from "./coach/contract";
 import { getCoachStatus, runCoach } from "./coach/service";
 import auth from "./routes/auth";
 import progress from "./routes/progress";
+import settings from "./routes/settings";
+import { loadSession } from "./session";
 import type { Env } from "./types";
 
-const VERSION = "0.1.1";
+const VERSION = "0.1.2";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -17,6 +20,15 @@ app.use(
     credentials: true,
   }),
 );
+
+async function loadUserAiConfig(env: Env, cookie: string | undefined) {
+  const sess = await loadSession(env, cookie);
+  if (!sess) return { sess: null, cfg: null };
+  const row = await env.DB.prepare(`SELECT ai_config_json FROM users WHERE id = ?`)
+    .bind(sess.user.id)
+    .first<{ ai_config_json: string | null }>();
+  return { sess, cfg: parseAiConfig(row?.ai_config_json) };
+}
 
 app.get("/api/health", async (c) => {
   const status = await getCoachStatus(c.env, "en");
@@ -36,12 +48,14 @@ app.get("/api/health", async (c) => {
 
 app.get("/api/coach/status", async (c) => {
   const locale = c.req.query("locale") || "zh-Hant";
-  const status = await getCoachStatus(c.env, locale);
+  const { cfg } = await loadUserAiConfig(c.env, c.req.header("Cookie"));
+  const status = await getCoachStatus(c.env, locale, cfg);
   return c.json(status);
 });
 
 app.route("/api/auth", auth);
 app.route("/api", progress);
+app.route("/api/settings", settings);
 
 app.post("/api/coach", async (c) => {
   let body: Partial<CoachRequest>;
@@ -54,6 +68,7 @@ app.post("/api/coach", async (c) => {
     body.locale === "ja" || body.locale === "zh-Hant" || body.locale === "en"
       ? body.locale
       : "en";
+  const { cfg } = await loadUserAiConfig(c.env, c.req.header("Cookie"));
   const req: CoachRequest = {
     tone: body.tone ?? "hint",
     speaker: body.speaker ?? "wukong",
@@ -64,7 +79,7 @@ app.post("/api/coach", async (c) => {
     recentMoves: body.recentMoves,
     storyBeat: body.storyBeat,
   };
-  const result = await runCoach(req, c.env);
+  const result = await runCoach(req, c.env, cfg);
   return c.json(result);
 });
 
