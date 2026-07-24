@@ -8,7 +8,8 @@
 
 | | |
 |--|--|
-| **版本** | v0.1.0（L01–L12 可玩 · 待遠端部署） |
+| **版本** | v0.1.1 |
+| **線上** | https://kids-go.phrixusjhon.workers.dev |
 | **目標年齡** | 約 10–11 歲（小四 · 暑假→下學期） |
 | **UI 語言** | 日本語 · 繁體中文 · English |
 | **部署** | Cloudflare Pages + Workers Free + D1 Free |

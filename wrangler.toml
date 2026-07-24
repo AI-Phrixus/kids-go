@@ -5,7 +5,7 @@ compatibility_date = "2025-07-05"
 [[d1_databases]]
 binding = "DB"
 database_name = "kids-go"
-database_id = "local-kids-go-placeholder"
+database_id = "35d8acbd-2abd-4a68-b62e-88dfa1f0fd0d"
 migrations_dir = "migrations"
 
 # Cloudflare Workers AI (free tier: stay on Workers Free for hard stop, no overage bill)

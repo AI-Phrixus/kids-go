@@ -2,56 +2,50 @@
 
 > 無密鑰。  
 > **最後更新**：2026-07-24  
-> **程式版本**：v0.1.1（Workers AI 免費鏈 + 軟上限提醒 · 待遠端部署）
+> **程式版本**：v0.1.1（已部署）
 
 ---
 
-## 服務
+## 生產服務
 
 | 項 | 狀態 |
 |----|------|
-| 本機 | `npx wrangler dev` → http://localhost:8787 |
-| 生產部署 | **待** `wrangler login` + `d1 create` + `deploy` |
-| GitHub | https://github.com/AI-Phrixus/kids-go |
-| 教練 | **`auto`**：CF Workers AI 免費 → BYOK 第三方 → 靜態；軟上限 40 次/日 + `/api/coach/status` 提醒 |
+| **URL** | **https://kids-go.phrixusjhon.workers.dev** |
+| 健康檢查 | `GET /api/health` |
+| 教練狀態 | `GET /api/coach/status?locale=zh-Hant` |
+| Cloudflare 帳號 | phrixusjhon@gmail.com · Free 建議維持 |
+| D1 | `kids-go` · `35d8acbd-2abd-4a68-b62e-88dfa1f0fd0d` · APAC |
+| Workers AI | 已綁定 `env.AI` · `COACH_PROVIDER=auto` |
+| 軟上限 | 40 次 CF 教練／UTC 日 → 再 BYOK／靜態 |
+
+---
+
+## 使用方式
+
+1. 打開 https://kids-go.phrixusjhon.workers.dev  
+2. 選語言 → **快速註冊**（暱稱 + 4～6 位 PIN）或家長郵箱  
+3. 西行地圖 → L01…L12  
+4. 約 20 分鐘會有護眼歇腳站  
+
+### 可選：第三方教練備援
+
+```bash
+cd ~/kids-go
+npx wrangler secret put GOOGLE_API_KEY
+# 或 XAI_API_KEY / AI_API_KEY + BASE_URL
+```
 
 ---
 
 ## 已完成
 
-| 項 | 狀態 |
-|----|------|
-| 雙軌註冊 | parent email / quick nick+PIN |
-| Session Cookie | `/api/auth/*` |
-| L01–L12 課 + 人機 | 解鎖鏈 + 徽章 |
-| 三語 UI + {{name}} | ja / zh-Hant / en |
-| 護眼休息 | 20 分鐘 + 20 秒倒數 overlay |
-| go-engine | 合法子、氣、提、弱 AI |
-| 多供應商教練骨架 | none / openai_compatible / xai / google |
-| 靜態資源 | Vite build → Worker ASSETS |
+- 雙軌註冊 · Session · L01–L12 · 弱 AI · 三語 · 暱稱  
+- Workers AI 免費優先 + 軟上限提醒 + BYOK/靜態降級  
+- GitHub：https://github.com/AI-Phrixus/kids-go  
 
----
+## 後續可選
 
-## 部署清單（需操作者授權 Cloudflare）
-
-```bash
-cd ~/kids-go
-npx wrangler login          # 瀏覽器授權
-npx wrangler d1 create kids-go
-# 把 database_id 寫入 wrangler.toml
-npx wrangler d1 migrations apply kids-go --remote
-npm run deploy
-```
-
----
-
-## 本機玩
-
-```bash
-cd ~/kids-go
-npm install --legacy-peer-deps
-npm run build:web
-npx wrangler d1 migrations apply kids-go --local
-npx wrangler dev
-# 開 http://localhost:8787
-```
+- 自訂域名  
+- 家長摘要 UI 橫幅  
+- 調高/調低 `COACH_CF_SOFT_MAX_CALLS`  
+- 更精美棋盤與西遊立繪  

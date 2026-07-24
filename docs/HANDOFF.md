@@ -28,6 +28,15 @@
 https://github.com/AI-Phrixus/kids-go
 ```
 
+生產 URL：
+
+```text
+https://kids-go.phrixusjhon.workers.dev
+```
+
+Cloudflare Account ID：`d86285bf94fd736fc841fc71f40a4172`  
+D1 `kids-go` id：`35d8acbd-2abd-4a68-b62e-88dfa1f0fd0d`
+
 ---
 
 ## 2. 接手順序（強制）
