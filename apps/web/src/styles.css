@@ -274,7 +274,51 @@ input[type="url"], input[type="password"] { width: 100%; }
 .board { touch-action: manipulation; }
 button { touch-action: manipulation; }
 
+.cell.focus {
+  outline: 3px solid #2f6f4e;
+  outline-offset: -2px;
+  z-index: 1;
+}
+.board:focus { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.step-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+.dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #e6d3b5;
+  display: inline-block;
+}
+.dot.on { background: var(--accent); box-shadow: 0 0 0 2px rgba(196, 92, 38, 0.25); }
+.dot.done { background: var(--ok); }
+.step-label { font-size: 0.85rem; margin-left: 0.25rem; }
+
+label.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 1 auto;
+  min-width: auto;
+}
+label.inline select { margin: 0; }
+
+button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible {
+  outline: 3px solid #2f6f4e;
+  outline-offset: 2px;
+}
+
 @media (max-width: 420px) {
   .stats { grid-template-columns: repeat(2, 1fr); }
   .top { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-bounce { animation: none; }
+  .progress-fill { transition: none; }
 }

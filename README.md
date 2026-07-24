@@ -8,12 +8,12 @@
 
 | | |
 |--|--|
-| **版本** | v0.4.0 · L01–L20 |
-| **線上** | **https://go.tdtc.indevs.in** · https://kids-go.phrixusjhon.workers.dev |
+| **版本** | v0.6.0 · L01–L20 |
+| **線上** | **https://go.tdtc.indevs.in** · https://go.tdtc.dpdns.org · workers.dev |
 | **目標年齡** | 約 10–11 歲（小四 · 暑假→下學期） |
 | **UI 語言** | 日本語 · 繁體中文 · English |
-| **部署** | Cloudflare Pages + Workers Free + D1 Free |
-| **教練 AI** | 可插拔 BYOK（預設離線句庫） |
+| **部署** | Cloudflare Workers Free + D1 Free（assets 一體） |
+| **教練 AI** | CF Free Workers AI → BYOK → 本地句庫 |
 | **倉庫** | https://github.com/AI-Phrixus/kids-go |
 
 > **新人接手請先讀**  

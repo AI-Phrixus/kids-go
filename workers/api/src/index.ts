@@ -11,9 +11,23 @@ import settings from "./routes/settings";
 import { loadSession } from "./session";
 import type { Env } from "./types";
 
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 
 const app = new Hono<{ Bindings: Env }>();
+
+/** Best-effort per-isolate rate limit (Free Workers). */
+const coachHits = new Map<string, { n: number; t: number }>();
+function coachRateOk(key: string, max = 30, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const row = coachHits.get(key);
+  if (!row || now - row.t > windowMs) {
+    coachHits.set(key, { n: 1, t: now });
+    return true;
+  }
+  if (row.n >= max) return false;
+  row.n += 1;
+  return true;
+}
 
 app.use(
   "/api/*",
@@ -62,6 +76,10 @@ app.route("/api/settings", settings);
 app.route("/api", analytics);
 
 app.post("/api/coach", async (c) => {
+  const ip = c.req.header("cf-connecting-ip") || "local";
+  if (!coachRateOk(`coach:${ip}`, 30)) {
+    return c.json({ error: "rate_limited" }, 429);
+  }
   let body: Partial<CoachRequest>;
   try {
     body = await c.req.json();

@@ -17,8 +17,9 @@ import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
 import { mascotSvg } from "./mascot";
 import { setSfxEnabled, sfx, sfxEnabled } from "./sfx";
 
-type Route = "welcome" | "map" | "lesson" | "free" | "settings" | "parent" | "privacy";
+type Route = "welcome" | "map" | "lesson" | "free" | "settings" | "parent" | "privacy" | "help";
 type FreeMode = "casual" | "race5" | "race10";
+type AiLevel = 0 | 1 | 2;
 
 let locale: Locale = (localStorage.getItem("kids-go-locale") as Locale) || "zh-Hant";
 let route: Route = "welcome";
@@ -39,6 +40,13 @@ let lessonTotal = 20;
 let showLibs = localStorage.getItem("kids-go-libs") === "1";
 let freeHistory: BoardState[] = [];
 let continueLessonId: string | null = null;
+let nextLessonId: string | null = null;
+let freeAiLevel: AiLevel = (Number(localStorage.getItem("kids-go-ai") || "1") as AiLevel) || 1;
+let coachBusyUntil = 0;
+let consecutivePasses = 0;
+let boardBusy = false;
+let focusCell: { x: number; y: number } | null = null;
+let allLessonIds: string[] = [];
 
 const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20, dailyCapMin: 60 });
 clock.onBreak = () => showBreak(true);
@@ -63,8 +71,27 @@ function errMsg(e: unknown): string {
   return friendlyError(code, locale);
 }
 
+function pushNav(r: Route) {
+  try {
+    history.pushState({ route: r, lessonId }, "", r === "welcome" ? "/" : `#${r}`);
+  } catch {
+    /* ignore */
+  }
+}
+
+window.addEventListener("popstate", () => {
+  if (route === "welcome") return;
+  if (route === "lesson" || route === "free" || route === "settings" || route === "parent" || route === "privacy" || route === "help") {
+    route = "map";
+    void renderMap();
+  }
+});
+
 async function boot() {
   saveLocale();
+  if ("serviceWorker" in navigator) {
+    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  }
   try {
     const me = await api.me();
     nickname = me.child?.nickname || "";
@@ -88,6 +115,7 @@ function render() {
   else if (route === "settings") void renderSettings();
   else if (route === "parent") void renderParent();
   else if (route === "privacy") renderPrivacy();
+  else if (route === "help") renderHelp();
   bindBreak();
 }
 
@@ -99,7 +127,7 @@ function shell(body: string) {
         <p class="sub">${t(locale, "subtitle")}</p>
       </div>
       <label class="lang">${t(locale, "lang")}
-        <select id="locale">
+        <select id="locale" aria-label="${t(locale, "lang")}">
           <option value="ja" ${locale === "ja" ? "selected" : ""}>日本語</option>
           <option value="zh-Hant" ${locale === "zh-Hant" ? "selected" : ""}>繁體中文</option>
           <option value="en" ${locale === "en" ? "selected" : ""}>English</option>
@@ -107,19 +135,20 @@ function shell(body: string) {
       </label>
     </header>
     ${body}
-    <div class="overlay hidden" id="break">
+    <div class="overlay hidden" id="break" role="dialog" aria-modal="true" aria-labelledby="care-title">
       <div class="panel">
-        <h2>${t(locale, "care_break")}</h2>
+        <h2 id="care-title">${t(locale, "care_break")}</h2>
         <p id="care-text"></p>
-        <div class="countdown" id="countdown">20</div>
+        <div class="countdown" id="countdown" aria-live="polite">20</div>
         <button class="primary" id="care-done" disabled>${t(locale, "care_done")}</button>
       </div>
     </div>
-    ${coachBanner ? `<p class="banner muted">${escapeHtml(coachBanner)}</p>` : ""}
+    ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.5.0 · <span id="mins">0</span> min · Cloudflare Free
+      v0.6.0 · <span id="mins">0</span> min · Cloudflare Free
+      · <a href="#" id="help-link">${t(locale, "help")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
-      · <button type="button" class="linkish" id="sfx-toggle">${sfxEnabled() ? "🔊" : "🔇"}</button>
+      · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
     </p>
   `;
   document.querySelector("#sfx-toggle")?.addEventListener("click", () => {
@@ -129,6 +158,13 @@ function shell(body: string) {
   document.querySelector("#privacy-link")?.addEventListener("click", (e) => {
     e.preventDefault();
     route = "privacy";
+    pushNav("privacy");
+    render();
+  });
+  document.querySelector("#help-link")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    route = "help";
+    pushNav("help");
     render();
   });
   document.querySelector("#locale")?.addEventListener("change", (e) => {
@@ -147,22 +183,33 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function bindEnterSubmit(btnId: string) {
+  app.querySelectorAll("input").forEach((inp) => {
+    inp.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter") {
+        e.preventDefault();
+        (document.querySelector(`#${btnId}`) as HTMLButtonElement | null)?.click();
+      }
+    });
+  });
+}
+
 function renderWelcome() {
   shell(`
     <div class="card welcome-hero">
       <div class="hero-row">${mascotSvg("idle")}
         <div>
           <h2>${t(locale, "welcome")}</h2>
-          <p class="muted">${locale === "zh-Hant" ? "跟著悟空學圍棋 · 金角銀邊草肚皮" : "Learn Go with Wukong"}</p>
+          <p class="muted">${t(locale, "welcome_tag")}</p>
         </div>
       </div>
-      <div class="tabs">
-        <button data-tab="quick" class="${authTab === "quick" ? "on" : ""}">${t(locale, "quick_reg")}</button>
-        <button data-tab="parent" class="${authTab === "parent" ? "on" : ""}">${t(locale, "parent_reg")}</button>
-        <button data-tab="login" class="${authTab === "login" ? "on" : ""}">${t(locale, "login")}</button>
+      <div class="tabs" role="tablist">
+        <button data-tab="quick" class="${authTab === "quick" ? "on" : ""}" role="tab">${t(locale, "quick_reg")}</button>
+        <button data-tab="parent" class="${authTab === "parent" ? "on" : ""}" role="tab">${t(locale, "parent_reg")}</button>
+        <button data-tab="login" class="${authTab === "login" ? "on" : ""}" role="tab">${t(locale, "login")}</button>
       </div>
       <div id="auth-form"></div>
-      <p class="err" id="err"></p>
+      <p class="err" id="err" role="alert"></p>
     </div>
   `);
   document.querySelectorAll("[data-tab]").forEach((b) =>
@@ -174,30 +221,42 @@ function renderWelcome() {
   const form = document.querySelector("#auth-form")!;
   if (authTab === "quick") {
     form.innerHTML = `
-      <label>${t(locale, "nickname")}<input id="nick" maxlength="12" /></label>
-      <label>${t(locale, "pin")}<input id="pin" inputmode="numeric" maxlength="6" /></label>
+      <label>${t(locale, "nickname")}<input id="nick" maxlength="12" autocomplete="username" /></label>
+      <label>${t(locale, "pin")}<input id="pin" inputmode="numeric" maxlength="6" autocomplete="current-password" /></label>
       <button class="primary" id="go">${t(locale, "start")}</button>
     `;
     document.querySelector("#go")!.addEventListener("click", async () => {
+      const btn = document.querySelector("#go") as HTMLButtonElement;
+      btn.disabled = true;
       try {
         const nick = (document.querySelector("#nick") as HTMLInputElement).value.trim();
         const pin = (document.querySelector("#pin") as HTMLInputElement).value.trim();
+        if (!nick || !/^\d{4,6}$/.test(pin)) {
+          showErr(friendlyError("invalid_input", locale));
+          btn.disabled = false;
+          return;
+        }
         await api.registerQuick({ nickname: nick, pin, locale });
         nickname = nick;
         route = "map";
+        pushNav("map");
         render();
       } catch (e) {
         showErr(errMsg(e));
+        btn.disabled = false;
       }
     });
+    bindEnterSubmit("go");
   } else if (authTab === "parent") {
     form.innerHTML = `
-      <label>${t(locale, "email")}<input id="email" type="email" /></label>
-      <label>${t(locale, "password")}<input id="pass" type="password" /></label>
+      <label>${t(locale, "email")}<input id="email" type="email" autocomplete="email" /></label>
+      <label>${t(locale, "password")}<input id="pass" type="password" autocomplete="new-password" /></label>
       <label>${t(locale, "nickname")}<input id="nick" maxlength="12" /></label>
       <button class="primary" id="go">${t(locale, "start")}</button>
     `;
     document.querySelector("#go")!.addEventListener("click", async () => {
+      const btn = document.querySelector("#go") as HTMLButtonElement;
+      btn.disabled = true;
       try {
         const email = (document.querySelector("#email") as HTMLInputElement).value.trim();
         const password = (document.querySelector("#pass") as HTMLInputElement).value;
@@ -205,16 +264,19 @@ function renderWelcome() {
         await api.registerParent({ email, password, childNickname: nick, locale });
         nickname = nick;
         route = "map";
+        pushNav("map");
         render();
       } catch (e) {
         showErr(errMsg(e));
+        btn.disabled = false;
       }
     });
+    bindEnterSubmit("go");
   } else {
     form.innerHTML = `
-      <p class="muted">Quick / Parent</p>
-      <label>${t(locale, "nickname")} / ${t(locale, "email")}<input id="id" /></label>
-      <label>${t(locale, "pin")} / ${t(locale, "password")}<input id="secret" /></label>
+      <p class="muted">${t(locale, "login_hint")}</p>
+      <label>${t(locale, "nickname")} / ${t(locale, "email")}<input id="id" autocomplete="username" /></label>
+      <label>${t(locale, "pin")} / ${t(locale, "password")}<input id="secret" type="password" autocomplete="current-password" /></label>
       <div class="row">
         <button id="lq">${t(locale, "quick_reg")} ${t(locale, "login")}</button>
         <button id="lp">${t(locale, "parent_reg")} ${t(locale, "login")}</button>
@@ -228,6 +290,7 @@ function renderWelcome() {
         const me = await api.me();
         nickname = me.child?.nickname || id;
         route = "map";
+        pushNav("map");
         render();
       } catch (e) {
         showErr(errMsg(e));
@@ -241,11 +304,13 @@ function renderWelcome() {
         const me = await api.me();
         nickname = me.child?.nickname || "";
         route = "map";
+        pushNav("map");
         render();
       } catch (e) {
         showErr(errMsg(e));
       }
     });
+    bindEnterSubmit("lq");
   }
 }
 
@@ -254,18 +319,42 @@ function showErr(msg: string) {
   if (el) el.textContent = msg;
 }
 
+async function openLesson(id: string) {
+  lessonId = id;
+  try {
+    const res = await api.lesson(lessonId);
+    lesson = res.lesson;
+    stepIndex = 0;
+    phase = "steps";
+    humanMoves = 0;
+    completing = false;
+    statusMsg = "";
+    board = setupBoard(lesson);
+    lastMove = null;
+    nextLessonId = null;
+    route = "lesson";
+    pushNav("lesson");
+    void api.track("lesson_start", { lessonId });
+    render();
+  } catch (e) {
+    alert(errMsg(e));
+  }
+}
+
 async function renderMap() {
-  let lessonsHtml = `<p class="muted">…</p>`;
+  let lessonsHtml = `<p class="muted">${t(locale, "loading")}</p>`;
   let progressPct = 0;
   let doneCount = 0;
   try {
     const data = await api.lessons();
     nickname = data.child.nickname;
     lessonTotal = data.lessons.length;
+    allLessonIds = data.lessons.map((l) => l.id);
     doneCount = data.lessons.filter((l) => l.status === "completed").length;
     progressPct = Math.round((doneCount / Math.max(1, lessonTotal)) * 100);
     const cont = data.lessons.find((l) => l.status === "in_progress" && l.playable);
-    continueLessonId = cont?.id ?? data.lessons.find((l) => l.status !== "locked" && l.status !== "completed")?.id ?? null;
+    continueLessonId =
+      cont?.id ?? data.lessons.find((l) => l.status !== "locked" && l.status !== "completed")?.id ?? null;
     lessonsHtml = data.lessons
       .map((l, i) => {
         const title = l.titles[locale] || l.titles.en || l.id;
@@ -274,7 +363,7 @@ async function renderMap() {
         const stars = "★".repeat(l.stars) + "☆".repeat(Math.max(0, 3 - l.stars));
         const cls = locked ? "locked" : done ? "done" : "open";
         return `
-          <button class="lesson ${cls}" data-id="${l.id}" ${locked ? "disabled" : ""}>
+          <button class="lesson ${cls}" data-id="${l.id}" ${locked ? "disabled" : ""} aria-label="${escapeHtml(l.id)} ${escapeHtml(title)}">
             <span class="stop">${i + 1}</span>
             <span class="lid">${l.id}</span>
             <span class="lt">${escapeHtml(title)}</span>
@@ -307,13 +396,13 @@ async function renderMap() {
       </div>
       <div class="progress-wrap">
         <div class="progress-label">${t(locale, "progress")}: ${doneCount}/${lessonTotal} · ${progressPct}%</div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${progressPct}%"></div></div>
+        <div class="progress-bar" role="progressbar" aria-valuenow="${progressPct}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${progressPct}%"></div></div>
       </div>
       <div class="row">
         ${continueLessonId ? `<button class="primary" id="continue">${t(locale, "continue_lesson")} ${continueLessonId}</button>` : ""}
         <button id="free">${t(locale, "free")}</button>
       </div>
-      <div class="map path">${lessonsHtml}</div>
+      <div class="map path" role="list">${lessonsHtml}</div>
     </div>
   `);
   document.querySelector("#logout")?.addEventListener("click", async () => {
@@ -323,10 +412,12 @@ async function renderMap() {
   });
   document.querySelector("#settings")?.addEventListener("click", () => {
     route = "settings";
+    pushNav("settings");
     render();
   });
   document.querySelector("#parent")?.addEventListener("click", () => {
     route = "parent";
+    pushNav("parent");
     render();
   });
   document.querySelector("#free")?.addEventListener("click", () => {
@@ -335,51 +426,20 @@ async function renderMap() {
     humanMoves = 0;
     lastMove = null;
     freeMode = "casual";
+    consecutivePasses = 0;
     statusMsg = "";
+    boardBusy = false;
     route = "free";
+    pushNav("free");
     void api.track("free_play_start", { mode: freeMode });
     render();
   });
-  document.querySelector("#continue")?.addEventListener("click", async () => {
-    if (!continueLessonId) return;
-    lessonId = continueLessonId;
-    try {
-      const res = await api.lesson(lessonId);
-      lesson = res.lesson;
-      stepIndex = 0;
-      phase = "steps";
-      humanMoves = 0;
-      completing = false;
-      statusMsg = "";
-      board = setupBoard(lesson);
-      lastMove = null;
-      route = "lesson";
-      void api.track("lesson_start", { lessonId });
-      render();
-    } catch (e) {
-      alert(errMsg(e));
-    }
+  document.querySelector("#continue")?.addEventListener("click", () => {
+    if (continueLessonId) void openLesson(continueLessonId);
   });
   document.querySelectorAll(".lesson:not(.locked)").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      lessonId = (btn as HTMLElement).dataset.id!;
-      try {
-        const res = await api.lesson(lessonId);
-        lesson = res.lesson;
-        stepIndex = 0;
-        phase = "steps";
-        humanMoves = 0;
-        completing = false;
-        statusMsg = "";
-        board = setupBoard(lesson);
-        lastMove = null;
-        route = "lesson";
-        void api.track("lesson_start", { lessonId });
-        render();
-      } catch (e) {
-        statusMsg = String((e as Error).message);
-        alert(statusMsg);
-      }
+    btn.addEventListener("click", () => {
+      void openLesson((btn as HTMLElement).dataset.id!);
     });
   });
 }
@@ -398,6 +458,16 @@ function setupBoard(l: LessonDetail): BoardState {
   return b;
 }
 
+function stepDots(): string {
+  if (!lesson || phase !== "steps") return "";
+  const total = Math.max(1, lesson.steps.length);
+  const cur = Math.min(stepIndex + 1, total);
+  const dots = lesson.steps
+    .map((_, i) => `<span class="dot ${i < stepIndex ? "done" : i === stepIndex ? "on" : ""}"></span>`)
+    .join("");
+  return `<div class="step-bar" aria-label="${t(locale, "step_of", { cur, total })}">${dots}<span class="muted step-label">${t(locale, "step_of", { cur, total })}</span></div>`;
+}
+
 function renderLesson() {
   if (!lesson) {
     route = "map";
@@ -410,18 +480,21 @@ function renderLesson() {
     const step = lesson.steps[stepIndex];
     if (!step || step.type === "story") {
       mid = `
+        ${stepDots()}
         <p class="story">${pickLocaleText(locale, lesson.story, name())}</p>
         <p class="muted">${pickLocaleText(locale, lesson.goal, name())}</p>
         <button class="primary" id="next">${t(locale, "next")}</button>`;
     } else if (step.type === "info") {
       mid = `
+        ${stepDots()}
         <p class="story">${pickLocaleText(locale, step.text, name())}</p>
         <button class="primary" id="next">${t(locale, "next")}</button>`;
     } else if (step.type === "tap") {
       mid = `
+        ${stepDots()}
         <p class="story">${pickLocaleText(locale, step.prompt, name())}</p>
         ${boardHtml(board, true)}
-        <p class="bubble">${escapeHtml(statusMsg)}</p>`;
+        <p class="bubble" role="status">${escapeHtml(statusMsg)}</p>`;
     }
   } else if (phase === "battle") {
     mid = `
@@ -432,7 +505,7 @@ function renderLesson() {
         <button id="ask">${t(locale, "ask")}</button>
         <button id="home">${t(locale, "home")}</button>
       </div>
-      <p class="bubble">${escapeHtml(statusMsg)}</p>`;
+      <p class="bubble" role="status">${escapeHtml(statusMsg)}</p>`;
   } else {
     mid = `
       <div class="win-hero">${mascotSvg("win")}
@@ -442,10 +515,11 @@ function renderLesson() {
         </div>
       </div>
       <div class="row">
-        <button class="primary" id="home">${t(locale, "home")}</button>
+        ${nextLessonId ? `<button class="primary" id="next-lesson">${t(locale, "next_lesson")} ${nextLessonId}</button>` : `<button class="primary" id="home">${t(locale, "home")}</button>`}
         <button id="again">${t(locale, "again")}</button>
+        ${nextLessonId ? `<button id="home">${t(locale, "home")}</button>` : ""}
       </div>
-      <p class="bubble">${escapeHtml(statusMsg)}</p>`;
+      <p class="bubble" role="status">${escapeHtml(statusMsg)}</p>`;
   }
 
   shell(`
@@ -473,6 +547,9 @@ function renderLesson() {
     route = "map";
     void renderMap();
   });
+  document.querySelector("#next-lesson")?.addEventListener("click", () => {
+    if (nextLessonId) void openLesson(nextLessonId);
+  });
   document.querySelector("#again")?.addEventListener("click", () => {
     phase = "battle";
     board = setupBoard(lesson!);
@@ -484,21 +561,17 @@ function renderLesson() {
   });
   document.querySelector("#ask")?.addEventListener("click", () => void askCoach());
   bindBoardClicks();
+  bindBoardKeyboard();
 }
 
 function renderFree() {
   const raceLabel =
     freeMode === "race5"
-      ? locale === "zh-Hant"
-        ? "吃子賽 · 先吃 5 子"
-        : "Capture race · first to 5"
+      ? t(locale, "race5")
       : freeMode === "race10"
-        ? locale === "zh-Hant"
-          ? "吃子賽 · 先吃 10 子"
-          : "Capture race · first to 10"
-        : locale === "zh-Hant"
-          ? "隨意對弈"
-          : "Casual";
+        ? t(locale, "race10")
+        : t(locale, "casual");
+  const turn = board.toPlay === "black" ? t(locale, "turn_black") : t(locale, "turn_white");
   shell(`
     <div class="card">
       <div class="row between">
@@ -506,17 +579,26 @@ function renderFree() {
         <button id="home">${t(locale, "home")}</button>
       </div>
       <div class="row">
-        <button id="mode-casual" class="${freeMode === "casual" ? "primary" : ""}">${locale === "zh-Hant" ? "隨意" : "Casual"}</button>
-        <button id="mode-r5" class="${freeMode === "race5" ? "primary" : ""}">${locale === "zh-Hant" ? "先吃5" : "Race5"}</button>
-        <button id="mode-r10" class="${freeMode === "race10" ? "primary" : ""}">${locale === "zh-Hant" ? "先吃10" : "Race10"}</button>
-        <button id="pass">${locale === "zh-Hant" ? "停一手" : "Pass"}</button>
+        <button id="mode-casual" class="${freeMode === "casual" ? "primary" : ""}">${t(locale, "casual")}</button>
+        <button id="mode-r5" class="${freeMode === "race5" ? "primary" : ""}">${t(locale, "race5")}</button>
+        <button id="mode-r10" class="${freeMode === "race10" ? "primary" : ""}">${t(locale, "race10")}</button>
+        <button id="pass">${t(locale, "pass")}</button>
         <button id="undo" ${freeHistory.length ? "" : "disabled"}>${t(locale, "undo")}</button>
-        <button id="reset">${locale === "zh-Hant" ? "重來" : "Reset"}</button>
-        <label class="check"><input type="checkbox" id="libs" ${showLibs ? "checked" : ""}/> ${t(locale, "show_libs")}</label>
+        <button id="reset">${t(locale, "reset")}</button>
       </div>
-      <p class="muted">${escapeHtml(raceLabel)} · B${board.captured.black} / W${board.captured.white} · ${board.toPlay === "black" ? "●" : "○"}</p>
-      ${boardHtml(board, true)}
-      <p class="bubble">${escapeHtml(statusMsg || `${name()} vs AI`)}</p>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="libs" ${showLibs ? "checked" : ""}/> ${t(locale, "show_libs")}</label>
+        <label class="inline">${t(locale, "ai_level")}
+          <select id="ai-level">
+            <option value="0" ${freeAiLevel === 0 ? "selected" : ""}>${t(locale, "ai_easy")}</option>
+            <option value="1" ${freeAiLevel === 1 ? "selected" : ""}>${t(locale, "ai_normal")}</option>
+            <option value="2" ${freeAiLevel === 2 ? "selected" : ""}>${t(locale, "ai_hard")}</option>
+          </select>
+        </label>
+      </div>
+      <p class="muted">${escapeHtml(raceLabel)} · B${board.captured.black} / W${board.captured.white} · ${turn}</p>
+      ${boardHtml(board, !boardBusy)}
+      <p class="bubble" role="status">${escapeHtml(statusMsg || t(locale, "free_vs", { name: name() }))}</p>
       <button id="ask">${t(locale, "ask")}</button>
     </div>
   `);
@@ -530,28 +612,42 @@ function renderFree() {
     board = createEmptyBoard(9);
     freeHistory = [];
     lastMove = null;
+    consecutivePasses = 0;
+    boardBusy = false;
     statusMsg = msg;
     render();
   };
   document.querySelector("#mode-casual")?.addEventListener("click", () => resetBoard("casual", ""));
-  document.querySelector("#mode-r5")?.addEventListener("click", () =>
-    resetBoard("race5", locale === "zh-Hant" ? "先吃滿 5 子獲勝！" : "First to 5 captures wins!"),
-  );
-  document.querySelector("#mode-r10")?.addEventListener("click", () =>
-    resetBoard("race10", locale === "zh-Hant" ? "先吃滿 10 子獲勝！" : "First to 10 captures wins!"),
-  );
+  document.querySelector("#mode-r5")?.addEventListener("click", () => resetBoard("race5", t(locale, "race5_goal")));
+  document.querySelector("#mode-r10")?.addEventListener("click", () => resetBoard("race10", t(locale, "race10_goal")));
   document.querySelector("#pass")?.addEventListener("click", () => {
+    if (boardBusy) return;
     freeHistory.push(structuredClone(board));
+    if (freeHistory.length > 40) freeHistory.shift();
     board = pass(board);
-    const mv = pickAiMove(board, 1);
+    consecutivePasses++;
+    if (consecutivePasses >= 2) {
+      statusMsg = t(locale, "double_pass");
+      render();
+      return;
+    }
+    const mv = pickAiMove(board, freeAiLevel);
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
       if (after) {
         board = after;
         lastMove = { x: mv.x, y: mv.y };
+        consecutivePasses = 0;
+      } else {
+        board = pass(board);
+        consecutivePasses++;
       }
+    } else {
+      board = pass(board);
+      consecutivePasses++;
     }
-    statusMsg = locale === "zh-Hant" ? "你停了一手，AI 繼續下。" : "You passed; AI moved.";
+    if (consecutivePasses >= 2) statusMsg = t(locale, "double_pass");
+    else statusMsg = t(locale, "you_passed");
     render();
   });
   document.querySelector("#undo")?.addEventListener("click", () => {
@@ -559,6 +655,7 @@ function renderFree() {
     if (!prev) return;
     board = prev;
     lastMove = null;
+    consecutivePasses = 0;
     statusMsg = t(locale, "undo");
     render();
   });
@@ -568,7 +665,12 @@ function renderFree() {
     localStorage.setItem("kids-go-libs", showLibs ? "1" : "0");
     render();
   });
+  document.querySelector("#ai-level")?.addEventListener("change", (e) => {
+    freeAiLevel = Number((e.target as HTMLSelectElement).value) as AiLevel;
+    localStorage.setItem("kids-go-ai", String(freeAiLevel));
+  });
   bindBoardClicks();
+  bindBoardKeyboard();
 }
 
 const HOSHI_9 = new Set(["2,2", "2,6", "4,4", "6,2", "6,6"]);
@@ -582,15 +684,19 @@ function boardHtml(b: BoardState, interactive: boolean): string {
       const stone = c === "black" ? "black" : c === "white" ? "white" : "";
       const last = lastMove && lastMove.x === x && lastMove.y === y ? " last" : "";
       const hoshi = !c && HOSHI_9.has(`${x},${y}`) ? " hoshi" : "";
+      const focused = focusCell && focusCell.x === x && focusCell.y === y ? " focus" : "";
       let libLabel = "";
       if (showLibs && c) {
         const libs = groupLiberties(b, x, y);
         libLabel = `<span class="lib-num">${libs}</span>`;
       }
-      return `<button class="cell ${stone}${last}${hoshi}" data-x="${x}" data-y="${y}" ${interactive ? "" : "disabled"}>${libLabel}</button>`;
+      const label = c
+        ? `${c} ${x + 1},${y + 1}`
+        : `empty ${x + 1},${y + 1}`;
+      return `<button type="button" class="cell ${stone}${last}${hoshi}${focused}" data-x="${x}" data-y="${y}" aria-label="${label}" ${interactive ? "" : "disabled"}>${libLabel}</button>`;
     })
     .join("");
-  return `<div class="board" style="grid-template-columns:repeat(${size},1fr)">${cells}</div>`;
+  return `<div class="board" role="grid" aria-label="Go board 9x9" style="grid-template-columns:repeat(${size},1fr)" tabindex="0">${cells}</div>`;
 }
 
 function bindBoardClicks() {
@@ -598,25 +704,56 @@ function bindBoardClicks() {
     btn.addEventListener("click", () => {
       const x = Number(btn.dataset.x);
       const y = Number(btn.dataset.y);
+      focusCell = { x, y };
       onTap(x, y);
     });
   });
 }
 
+function bindBoardKeyboard() {
+  const boardEl = document.querySelector(".board") as HTMLElement | null;
+  if (!boardEl) return;
+  if (!focusCell) focusCell = { x: 4, y: 4 };
+  boardEl.addEventListener("keydown", (e) => {
+    if (!focusCell) focusCell = { x: 4, y: 4 };
+    const k = e.key;
+    let moved = false;
+    if (k === "ArrowLeft") {
+      focusCell = { x: Math.max(0, focusCell.x - 1), y: focusCell.y };
+      moved = true;
+    } else if (k === "ArrowRight") {
+      focusCell = { x: Math.min(board.size - 1, focusCell.x + 1), y: focusCell.y };
+      moved = true;
+    } else if (k === "ArrowUp") {
+      focusCell = { x: focusCell.x, y: Math.max(0, focusCell.y - 1) };
+      moved = true;
+    } else if (k === "ArrowDown") {
+      focusCell = { x: focusCell.x, y: Math.min(board.size - 1, focusCell.y + 1) };
+      moved = true;
+    } else if (k === "Enter" || k === " ") {
+      e.preventDefault();
+      onTap(focusCell.x, focusCell.y);
+      return;
+    }
+    if (moved) {
+      e.preventDefault();
+      document.querySelectorAll(".cell.focus").forEach((el) => el.classList.remove("focus"));
+      const cell = document.querySelector(`.cell[data-x="${focusCell.x}"][data-y="${focusCell.y}"]`);
+      cell?.classList.add("focus");
+      (cell as HTMLElement | null)?.focus();
+    }
+  });
+}
+
 function onTap(x: number, y: number) {
+  if (boardBusy) return;
   if (route === "lesson" && phase === "steps" && lesson) {
     const step = lesson.steps[stepIndex];
     if (step?.type === "tap") {
       const ok = step.correct.some(([cx, cy]) => cx === x && cy === y);
       if (ok) {
         sfx.ok();
-        statusMsg =
-          locale === "zh-Hant"
-            ? `${name()}，答對了！`
-            : locale === "ja"
-              ? `${name()}、せいかい！`
-              : `${name()}, correct!`;
-        // Quiz taps only highlight — do NOT tryPlay (would flip toPlay and break multi-step quizzes)
+        statusMsg = t(locale, "correct", { name: name() });
         lastMove = { x, y };
         stepIndex++;
         if (stepIndex >= lesson.steps.length) {
@@ -629,12 +766,7 @@ function onTap(x: number, y: number) {
         render();
       } else {
         sfx.wrong();
-        statusMsg =
-          locale === "zh-Hant"
-            ? "再找找看～想想口訣或數一數氣。"
-            : locale === "ja"
-              ? "もういちど！気を数えよう。"
-              : "Try again — count liberties or recall the proverb!";
+        statusMsg = t(locale, "try_again_quiz");
         render();
       }
       return;
@@ -647,46 +779,53 @@ function onTap(x: number, y: number) {
   }
   if (route === "free") {
     const next = tryPlay(board, x, y);
-    if (!next) return;
+    if (!next) {
+      statusMsg = t(locale, "illegal");
+      render();
+      return;
+    }
     freeHistory.push(structuredClone(board));
     if (freeHistory.length > 40) freeHistory.shift();
     board = next;
     lastMove = { x, y };
+    consecutivePasses = 0;
     sfx.place();
     const target = freeMode === "race5" ? 5 : freeMode === "race10" ? 10 : 0;
     let win = target ? captureRaceWinner(board.captured, target) : null;
     if (win === "black") {
       sfx.win();
       void api.track("capture_race_win", { target });
-      statusMsg =
-        locale === "zh-Hant" ? `${name()} 獲勝！先吃滿 ${target} 子！` : `${name()} wins! First to ${target}!`;
+      statusMsg = t(locale, "race_win", { name: name(), n: target });
       render();
       return;
     }
-    const mv = pickAiMove(board, 1);
+    boardBusy = true;
+    const capBefore = board.captured.white;
+    const mv = pickAiMove(board, freeAiLevel);
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
       if (after) {
+        if (after.captured.white > capBefore) sfx.capture();
         board = after;
         lastMove = { x: mv.x, y: mv.y };
+        consecutivePasses = 0;
       }
     }
+    boardBusy = false;
     win = target ? captureRaceWinner(board.captured, target) : null;
     if (win === "white") {
-      statusMsg =
-        locale === "zh-Hant" ? `AI 先吃滿 ${target} 子。再試一次！` : `AI reached ${target}. Try again!`;
+      statusMsg = t(locale, "race_lose", { n: target });
     } else if (win === "black") {
-      statusMsg =
-        locale === "zh-Hant" ? `${name()} 獲勝！` : `${name()} wins!`;
+      statusMsg = t(locale, "race_win", { name: name(), n: target });
     } else {
-      statusMsg = `${name()} · B${board.captured.black}/W${board.captured.white}${target ? ` (目標${target})` : ""}`;
+      statusMsg = `${name()} · B${board.captured.black}/W${board.captured.white}${target ? ` (${target})` : ""}`;
     }
     render();
   }
 }
 
 function handleBattleMove(x: number, y: number) {
-  if (!lesson) return;
+  if (!lesson || boardBusy) return;
   const mode = lesson.battle.mode;
 
   if (mode === "find_atari") {
@@ -696,8 +835,7 @@ function handleBattleMove(x: number, y: number) {
       lastMove = { x, y };
       void completeLesson(3);
     } else {
-      statusMsg =
-        locale === "zh-Hant" ? "找只剩 1 氣的白子～" : "Find the atari stone!";
+      statusMsg = t(locale, "find_atari");
       render();
     }
     return;
@@ -705,7 +843,7 @@ function handleBattleMove(x: number, y: number) {
 
   const next = tryPlay(board, x, y);
   if (!next) {
-    statusMsg = locale === "zh-Hant" ? "這裡不能下" : "Illegal move";
+    statusMsg = t(locale, "illegal");
     render();
     return;
   }
@@ -718,6 +856,7 @@ function handleBattleMove(x: number, y: number) {
 
   if (mode === "place_n") {
     const need = lesson.battle.n ?? 10;
+    boardBusy = true;
     const mv = pickAiMove(board, (lesson.battle.aiLevel as 0 | 1 | 2) ?? 0);
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
@@ -726,7 +865,8 @@ function handleBattleMove(x: number, y: number) {
         lastMove = { x: mv.x, y: mv.y };
       }
     }
-    statusMsg = `${humanMoves}/${need}`;
+    boardBusy = false;
+    statusMsg = t(locale, "place_progress", { cur: humanMoves, need });
     if (humanMoves >= need) {
       void completeLesson(2);
       return;
@@ -742,6 +882,7 @@ function handleBattleMove(x: number, y: number) {
       void completeLesson(3);
       return;
     }
+    boardBusy = true;
     const mv = pickAiMove(board, (lesson.battle.aiLevel as 0 | 1 | 2) ?? 0);
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
@@ -750,15 +891,16 @@ function handleBattleMove(x: number, y: number) {
         lastMove = { x: mv.x, y: mv.y };
       }
     }
+    boardBusy = false;
     if (board.captured.black >= need) {
       sfx.capture();
       void completeLesson(3);
       return;
     }
-    statusMsg =
-      locale === "zh-Hant"
-        ? `${name()}，再吃 ${need - board.captured.black} 子！`
-        : `${name()}, capture ${need - board.captured.black} more!`;
+    statusMsg = t(locale, "capture_more", {
+      name: name(),
+      n: need - board.captured.black,
+    });
     render();
   }
 }
@@ -771,10 +913,23 @@ function isAtariTarget(x: number, y: number, pts: [number, number][]): boolean {
   return false;
 }
 
+function computeNextLesson(currentId: string): string | null {
+  const i = allLessonIds.indexOf(currentId);
+  if (i >= 0 && i + 1 < allLessonIds.length) return allLessonIds[i + 1]!;
+  // fallback sequential L01..L20
+  const m = /^L(\d+)$/.exec(currentId);
+  if (m) {
+    const n = Number(m[1]) + 1;
+    if (n <= 20) return `L${String(n).padStart(2, "0")}`;
+  }
+  return null;
+}
+
 async function completeLesson(stars: number) {
   if (!lesson || completing || phase === "done") return;
   completing = true;
   phase = "done";
+  nextLessonId = computeNextLesson(lesson.id);
   render();
   try {
     await api.complete(lesson.id, stars);
@@ -807,6 +962,13 @@ async function completeLesson(stars: number) {
 }
 
 async function askCoach() {
+  const now = Date.now();
+  if (now < coachBusyUntil) {
+    statusMsg = t(locale, "coach_wait");
+    render();
+    return;
+  }
+  coachBusyUntil = now + 2500;
   try {
     void api.track("coach_hint", { lessonId });
     const c = await api.coach({
@@ -815,14 +977,11 @@ async function askCoach() {
       locale,
       childName: name(),
       lessonId: lessonId,
-      boardSummary: `toPlay=${board.toPlay} capB=${board.captured.black}`,
+      boardSummary: `toPlay=${board.toPlay} capB=${board.captured.black} capW=${board.captured.white}`,
     });
     statusMsg = c.reminder ? `${c.say}\n—— ${c.reminder}` : c.say;
   } catch {
-    statusMsg =
-      locale === "zh-Hant"
-        ? `${name()}，先數數氣再下！金角銀邊草肚皮～`
-        : `${name()}, count liberties! Corners before center!`;
+    statusMsg = t(locale, "try_again_quiz");
   }
   render();
 }
@@ -862,22 +1021,43 @@ function bindBreak() {
   });
 }
 
+function goHome() {
+  if (nickname) {
+    route = "map";
+    void renderMap();
+  } else {
+    route = "welcome";
+    render();
+  }
+}
+
+function renderHelp() {
+  shell(`
+    <div class="card privacy">
+      <h2>${t(locale, "help_title")}</h2>
+      <p class="story">${t(locale, "help_body")}</p>
+      <button class="primary" id="home">${t(locale, "home")}</button>
+    </div>
+  `);
+  document.querySelector("#home")?.addEventListener("click", () => goHome());
+}
+
 async function renderParent() {
-  let body = `<p class="muted">…</p>`;
+  let body = `<p class="muted">${t(locale, "loading")}</p>`;
   try {
     const s = await api.parentSummary(locale);
     let usageHtml = "";
     try {
       const u = await api.usageStats();
       usageHtml = `
-        <h3>${locale === "zh-Hant" ? "近 30 日使用（暑假觀察）" : "Last 30 days"}</h3>
+        <h3>${t(locale, "usage_30d")}</h3>
         <div class="stats">
-          <div><strong>${u.summary.sessions}</strong><br/>sessions</div>
-          <div><strong>${u.summary.lessonsCompleted}</strong><br/>lessons</div>
-          <div><strong>${u.summary.eyeBreaks}</strong><br/>eye breaks</div>
-          <div><strong>${u.summary.freePlays}</strong><br/>free play</div>
+          <div><strong>${u.summary.sessions}</strong><br/>${t(locale, "sessions")}</div>
+          <div><strong>${u.summary.lessonsCompleted}</strong><br/>${t(locale, "lessons_done")}</div>
+          <div><strong>${u.summary.eyeBreaks}</strong><br/>${t(locale, "eye_breaks")}</div>
+          <div><strong>${u.summary.freePlays}</strong><br/>${t(locale, "free_plays")}</div>
         </div>
-        <p class="muted">${locale === "zh-Hant" ? "護眼休息／通關比" : "Breaks per clear"}: ${u.summary.breakPerLesson}</p>`;
+        <p class="muted">${t(locale, "breaks_per")}: ${u.summary.breakPerLesson}</p>`;
     } catch {
       usageHtml = "";
     }
@@ -914,7 +1094,7 @@ async function renderParent() {
       <button class="primary" id="home">${t(locale, "home")}</button>
     `;
   } catch (e) {
-    body = `<p class="err">${escapeHtml(String((e as Error).message))}</p>
+    body = `<p class="err">${escapeHtml(errMsg(e))}</p>
       <button id="home">${t(locale, "home")}</button>`;
   }
   shell(`<div class="card">${body}</div>`);
@@ -958,10 +1138,28 @@ function renderPrivacy() {
         </ul>`
       : locale === "ja"
         ? `<h2>プライバシー</h2>
+        <p>Kids Igo は家庭で囲碁を学ぶためのサービスです（Cloudflare 上）。</p>
+        <h3>集めるもの</h3>
         <ul>
-          <li>進捗・バッジ・利用イベント（通関・休憩など）を D1 に保存。</li>
-          <li>API Key は設定のみ。公開ランキングなし。</li>
-          <li>AI は CF 無料→第三者→定型文。第三者利用時はその規約に従う。</li>
+          <li><strong>アカウント</strong>：保護者メール（任意）またはなまえ+PIN。パスワード／PIN はハッシュのみ保存。</li>
+          <li><strong>進捗</strong>：通関・星・バッジ・対局要約。</li>
+          <li><strong>利用イベント</strong>（直近30日）：起動・通関・目休め・自由対局・ヒント回数。会話全文は保存しません。</li>
+          <li><strong>AI 設定</strong>：任意の第三者 Base URL／API Key／Model（Key は末尾4桁のみ表示）。</li>
+        </ul>
+        <h3>しないこと</h3>
+        <ul>
+          <li>公開ランキング・見知らぬ人との対局・個人情報の販売なし。</li>
+          <li>本名・学校・位置情報の強制収集なし。</li>
+        </ul>
+        <h3>AI</h3>
+        <ul>
+          <li>優先：Cloudflare Workers AI（無料枠）→ 第三者 BYOK → 定型文。</li>
+          <li>第三者 API 利用時は盤面要約・なまえがその規約に従います。</li>
+        </ul>
+        <h3>お子さまと保護者</h3>
+        <ul>
+          <li>PIN／メールは保護者と一緒に管理してください。</li>
+          <li>保護者まとめはその家庭の進捗のみ。</li>
         </ul>`
         : `<h2>Privacy</h2>
         <p>Kids Igo stores account, progress, and aggregate usage events (lesson clear, eye breaks) in your Cloudflare D1.</p>
@@ -970,18 +1168,16 @@ function renderPrivacy() {
           <li>Optional third-party AI keys stay in your settings (last 4 chars shown).</li>
           <li>Coach: Cloudflare free AI first, then your BYOK, then offline phrases.</li>
           <li>Parents should help manage PIN/email for children.</li>
+          <li>We do not sell personal data or force real name/school/location.</li>
         </ul>`;
   shell(
     `<div class="card privacy">${body}<button class="primary" id="home">${t(locale, "home")}</button></div>`,
   );
-  document.querySelector("#home")?.addEventListener("click", () => {
-    route = "map";
-    void renderMap();
-  });
+  document.querySelector("#home")?.addEventListener("click", () => goHome());
 }
 
 async function renderSettings() {
-  let body = `<p class="muted">…</p>`;
+  let body = `<p class="muted">${t(locale, "loading")}</p>`;
   try {
     const data = await api.getAiSettings();
     const c = data.config;
@@ -1031,10 +1227,10 @@ async function renderSettings() {
         <button id="clearKey">${t(locale, "clear_key")}</button>
         <button id="home">${t(locale, "home")}</button>
       </div>
-      <p class="err" id="setMsg"></p>
+      <p class="err" id="setMsg" role="status"></p>
     `;
   } catch (e) {
-    body = `<p class="err">${escapeHtml(String((e as Error).message))}</p>
+    body = `<p class="err">${escapeHtml(errMsg(e))}</p>
       <button id="home">${t(locale, "home")}</button>`;
   }
 
@@ -1073,7 +1269,7 @@ async function renderSettings() {
       const k = document.querySelector("#apiKey") as HTMLInputElement | null;
       if (k) k.value = "";
     } catch (err) {
-      if (msg) msg.textContent = String((err as Error).message);
+      if (msg) msg.textContent = errMsg(err);
     }
   });
   document.querySelector("#clearKey")?.addEventListener("click", async () => {
@@ -1082,12 +1278,12 @@ async function renderSettings() {
       await api.saveAiSettings({ clearApiKey: true });
       if (msg) msg.textContent = t(locale, "saved");
     } catch (err) {
-      if (msg) msg.textContent = String((err as Error).message);
+      if (msg) msg.textContent = errMsg(err);
     }
   });
   document.querySelector("#testAi")?.addEventListener("click", async () => {
     const msg = document.querySelector("#setMsg");
-    if (msg) msg.textContent = "…";
+    if (msg) msg.textContent = t(locale, "testing");
     try {
       const key = (document.querySelector("#apiKey") as HTMLInputElement)?.value;
       if (key) {
@@ -1102,7 +1298,7 @@ async function renderSettings() {
       const r = await api.testAiSettings();
       if (msg) msg.textContent = r.ok ? `OK: ${r.sample || "ok"}` : r.error || "fail";
     } catch (err) {
-      if (msg) msg.textContent = String((err as Error).message);
+      if (msg) msg.textContent = errMsg(err);
     }
   });
 }

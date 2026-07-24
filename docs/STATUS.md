@@ -1,6 +1,6 @@
 # 狀態快照
 
-> **版本**：v0.5.0  
+> **版本**：v0.6.0  
 > **更新**：2026-07-24  
 
 ## 網址
@@ -13,14 +13,20 @@
 
 GitHub：https://github.com/AI-Phrixus/kids-go  
 
-## v0.5 完善
+## v0.6 完善
 
-- PWA manifest + favicon  
-- 錯誤訊息三語友好  
-- 地圖「繼續上一課」  
-- 自由對弈：悔一手、顯示氣、每日螢幕軟上限提示  
-- 安全標頭 CSP / nosniff / frame-deny  
-- 引擎測試 `npm run test:engine`  
+- 三語字串補全（自由對弈、家長統計、錯誤、怎麼玩）
+- 通關後「下一課」；課內步驟進度點
+- 自由對弈：AI 難度、雙方停手結束、悔棋保留
+- 棋盤 a11y：aria、鍵盤方向鍵、Enter 落子、focus 環
+- 表單 Enter 送出、教練 2.5s 冷卻、瀏覽器返回
+- 完整日文隱私說明 + 怎麼玩手冊
+- Service Worker 離線殼（不緩存 API）
+- 引擎測試：劫、吃子賽、AI 優先提子
+
+## v0.5 回顧
+
+- PWA manifest + favicon、悔棋、顯示氣、繼續上一課、CSP、引擎測試  
 
 ## 產品目標
 

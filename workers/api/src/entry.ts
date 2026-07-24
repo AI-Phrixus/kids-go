@@ -11,6 +11,7 @@ const SECURITY: Record<string, string> = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Cross-Origin-Opener-Policy": "same-origin",
+  "X-XSS-Protection": "0",
 };
 
 function withSecurity(res: Response): Response {

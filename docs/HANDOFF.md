@@ -1,6 +1,6 @@
 # Kids Igo 交接手冊（新帳號／新 AI 接手必讀）
 
-> 版本：**v0.0.1**  
+> 版本：**v0.6.0**  
 > 最後更新：2026-07-24  
 > 目的：在**不依賴舊對話**的情況下接續開發與部署。
 
@@ -37,6 +37,8 @@ docs/AI-TO-AI-QUOTA.md
 生產 URL：
 
 ```text
+https://go.tdtc.indevs.in
+https://go.tdtc.dpdns.org
 https://kids-go.phrixusjhon.workers.dev
 ```
 

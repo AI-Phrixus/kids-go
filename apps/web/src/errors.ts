@@ -43,8 +43,15 @@ const MAP: Record<string, Record<Locale, string>> = {
   },
 };
 
+const FALLBACK: Record<Locale, string> = {
+  ja: "うまくいかなかったよ。もういちど試してね。",
+  "zh-Hant": "出了點問題，請再試一次。",
+  en: "Something went wrong. Please try again.",
+};
+
 export function friendlyError(code: string, locale: Locale): string {
   const row = MAP[code];
   if (row) return row[locale] || row.en;
-  return code || (locale === "zh-Hant" ? "出了點問題" : "Something went wrong");
+  // Kids-friendly fallback instead of raw error codes
+  return FALLBACK[locale] || FALLBACK.en;
 }
