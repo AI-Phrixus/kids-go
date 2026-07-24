@@ -43,6 +43,12 @@ const dict: Record<Locale, Record<string, string>> = {
     clear_key: "Keyを消す",
     saved: "保存しました",
     preset: "プリセット",
+    parent: "保護者まとめ",
+    privacy: "プライバシー",
+    badges: "バッジ",
+    progress: "進捗",
+    next_stop: "次の駅",
+    journey: "取経の道",
   },
   "zh-Hant": {
     title: "Kids Igo · 西遊圍棋",
@@ -86,6 +92,12 @@ const dict: Record<Locale, Record<string, string>> = {
     clear_key: "清除 Key",
     saved: "已儲存",
     preset: "預設範本",
+    parent: "家長摘要",
+    privacy: "隱私說明",
+    badges: "徽章",
+    progress: "進度",
+    next_stop: "下一站",
+    journey: "取經之路",
   },
   en: {
     title: "Kids Igo · Journey Go",
@@ -129,6 +141,12 @@ const dict: Record<Locale, Record<string, string>> = {
     clear_key: "Clear key",
     saved: "Saved",
     preset: "Presets",
+    parent: "Parent summary",
+    privacy: "Privacy",
+    badges: "Badges",
+    progress: "Progress",
+    next_stop: "Next stop",
+    journey: "Pilgrim path",
   },
 };
 

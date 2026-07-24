@@ -72,8 +72,9 @@ label { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.45rem 0; 
 .map { display: flex; flex-direction: column; gap: 0.45rem; margin: 0.75rem 0; }
 .lesson {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
   gap: 0.5rem;
+  align-items: center;
   text-align: left;
   width: 100%;
 }
@@ -157,3 +158,73 @@ label.check {
 }
 label.check input { width: auto; }
 input[type="url"], input[type="password"] { width: 100%; }
+
+.progress-wrap { margin: 0.75rem 0 1rem; }
+.progress-label { font-size: 0.9rem; margin-bottom: 0.35rem; color: #5c4b3a; }
+.progress-bar {
+  height: 10px;
+  background: #e8dcc8;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #c45c26, #e8a54b);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.map.path .lesson {
+  position: relative;
+  border-left: 4px solid #e6c89a;
+}
+.map.path .lesson.open { border-left-color: var(--accent); }
+.map.path .lesson.done { border-left-color: var(--ok); background: #f3faf5; }
+.map.path .lesson.locked { opacity: 0.65; }
+.stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: #3d2b1f;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.lesson.done .stop { background: var(--ok); }
+.lesson.locked .stop { background: var(--locked); }
+
+.cell.last {
+  box-shadow: 0 0 0 2px #c45c26, 0 0 8px rgba(196, 92, 38, 0.55);
+}
+.cell.hoshi {
+  background-image: radial-gradient(circle, #8b5a2b 15%, transparent 16%);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  text-align: center;
+}
+.stats div {
+  background: #fff;
+  border: 1px solid #e6d3b5;
+  border-radius: 12px;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+}
+.badge-pill {
+  display: inline-block;
+  background: #fff3e0;
+  border: 1px solid #e6c89a;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  margin: 0.2rem;
+  font-size: 0.85rem;
+}
+.skill-list { padding-left: 1.2rem; }
+.footer a { color: var(--accent); }

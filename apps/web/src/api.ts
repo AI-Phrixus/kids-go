@@ -108,6 +108,24 @@ export const api = {
       method: "POST",
       body: "{}",
     }),
+  parentSummary: (locale: string) =>
+    req<{
+      headline: string;
+      stats: {
+        completedCount: number;
+        totalLessons: number;
+        totalStars: number;
+        badgeCount: number;
+        percent: number;
+      };
+      skills: { lessonId: string; skill: string; stars: number }[];
+      badges: { id: string; name: string }[];
+      nextLesson: { id: string; title: string } | null;
+      parentTips: string[];
+      note: string;
+    }>(`/api/parent/summary?locale=${encodeURIComponent(locale)}`),
+  badges: () =>
+    req<{ badges: { badge_id: string; earned_at: number }[] }>("/api/badges"),
 };
 
 export type LessonDetail = {

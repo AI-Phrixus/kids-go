@@ -4,12 +4,13 @@ import { parseAiConfig } from "./ai-config";
 import type { CoachRequest } from "./coach/contract";
 import { getCoachStatus, runCoach } from "./coach/service";
 import auth from "./routes/auth";
+import parent from "./routes/parent";
 import progress from "./routes/progress";
 import settings from "./routes/settings";
 import { loadSession } from "./session";
 import type { Env } from "./types";
 
-const VERSION = "0.1.3";
+const VERSION = "0.2.0";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -55,6 +56,7 @@ app.get("/api/coach/status", async (c) => {
 
 app.route("/api/auth", auth);
 app.route("/api", progress);
+app.route("/api", parent);
 app.route("/api/settings", settings);
 
 app.post("/api/coach", async (c) => {

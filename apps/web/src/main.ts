@@ -8,10 +8,11 @@ import {
   type Color,
 } from "../../../packages/go-engine/src/index";
 import { api, type LessonDetail } from "./api";
+import { nextCareText } from "./care-rituals";
 import { EyeCareClock } from "./eyecare";
 import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
 
-type Route = "welcome" | "map" | "lesson" | "free" | "settings";
+type Route = "welcome" | "map" | "lesson" | "free" | "settings" | "parent" | "privacy";
 
 let locale: Locale = (localStorage.getItem("kids-go-locale") as Locale) || "zh-Hant";
 let route: Route = "welcome";
@@ -26,6 +27,7 @@ let statusMsg = "";
 let authTab: "quick" | "parent" | "login" = "quick";
 let completing = false;
 let coachBanner = "";
+let lastMove: { x: number; y: number } | null = null;
 
 const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20 });
 clock.onBreak = () => showBreak(true);
@@ -61,6 +63,8 @@ function render() {
   else if (route === "lesson") renderLesson();
   else if (route === "free") renderFree();
   else if (route === "settings") void renderSettings();
+  else if (route === "parent") void renderParent();
+  else if (route === "privacy") renderPrivacy();
   bindBreak();
 }
 
@@ -89,8 +93,16 @@ function shell(body: string) {
       </div>
     </div>
     ${coachBanner ? `<p class="banner muted">${escapeHtml(coachBanner)}</p>` : ""}
-    <p class="footer muted">v0.1.2 · <span id="mins">0</span> min · Cloudflare Free</p>
+    <p class="footer muted">
+      v0.2.0 · <span id="mins">0</span> min · Cloudflare Free
+      · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
+    </p>
   `;
+  document.querySelector("#privacy-link")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    route = "privacy";
+    render();
+  });
   document.querySelector("#locale")?.addEventListener("change", (e) => {
     locale = (e.target as HTMLSelectElement).value as Locale;
     saveLocale();
@@ -210,19 +222,26 @@ function showErr(msg: string) {
 
 async function renderMap() {
   let lessonsHtml = `<p class="muted">…</p>`;
+  let progressPct = 0;
+  let doneCount = 0;
   try {
     const data = await api.lessons();
     nickname = data.child.nickname;
+    doneCount = data.lessons.filter((l) => l.status === "completed").length;
+    progressPct = Math.round((doneCount / Math.max(1, data.lessons.length)) * 100);
     lessonsHtml = data.lessons
-      .map((l) => {
+      .map((l, i) => {
         const title = l.titles[locale] || l.titles.en || l.id;
         const locked = l.status === "locked" || !l.playable;
+        const done = l.status === "completed";
         const stars = "★".repeat(l.stars) + "☆".repeat(Math.max(0, 3 - l.stars));
+        const cls = locked ? "locked" : done ? "done" : "open";
         return `
-          <button class="lesson ${locked ? "locked" : ""}" data-id="${l.id}" ${locked ? "disabled" : ""}>
+          <button class="lesson ${cls}" data-id="${l.id}" ${locked ? "disabled" : ""}>
+            <span class="stop">${i + 1}</span>
             <span class="lid">${l.id}</span>
-            <span class="lt">${title}</span>
-            <span class="ls">${locked ? t(locale, "locked") : stars}</span>
+            <span class="lt">${escapeHtml(title)}</span>
+            <span class="ls">${locked ? t(locale, "locked") : done ? stars : "▶"}</span>
           </button>`;
       })
       .join("");
@@ -232,7 +251,6 @@ async function renderMap() {
     return;
   }
 
-  // refresh coach quota banner
   try {
     const st = await api.coachStatus(locale);
     coachBanner = st.reminder || "";
@@ -243,13 +261,18 @@ async function renderMap() {
   shell(`
     <div class="card">
       <div class="row between">
-        <h2>${t(locale, "map")} · ${escapeHtml(name())}</h2>
+        <h2>${t(locale, "journey")} · ${escapeHtml(name())}</h2>
         <div class="row">
+          <button id="parent">${t(locale, "parent")}</button>
           <button id="settings">${t(locale, "settings")}</button>
           <button id="logout">${t(locale, "logout")}</button>
         </div>
       </div>
-      <div class="map">${lessonsHtml}</div>
+      <div class="progress-wrap">
+        <div class="progress-label">${t(locale, "progress")}: ${doneCount}/12 · ${progressPct}%</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${progressPct}%"></div></div>
+      </div>
+      <div class="map path">${lessonsHtml}</div>
       <div class="row">
         <button id="free">${t(locale, "free")}</button>
       </div>
@@ -264,9 +287,14 @@ async function renderMap() {
     route = "settings";
     render();
   });
+  document.querySelector("#parent")?.addEventListener("click", () => {
+    route = "parent";
+    render();
+  });
   document.querySelector("#free")?.addEventListener("click", () => {
     board = createEmptyBoard(9);
     humanMoves = 0;
+    lastMove = null;
     statusMsg = "";
     route = "free";
     render();
@@ -283,6 +311,7 @@ async function renderMap() {
         completing = false;
         statusMsg = "";
         board = setupBoard(lesson);
+        lastMove = null;
         route = "lesson";
         render();
       } catch (e) {
@@ -422,14 +451,19 @@ function renderFree() {
   bindBoardClicks();
 }
 
+const HOSHI_9 = new Set(["2,2", "2,6", "4,4", "6,2", "6,6"]);
+
 function boardHtml(b: BoardState, interactive: boolean): string {
   const size = b.size;
   const cells = b.grid
     .map((c, i) => {
       const x = i % size;
       const y = Math.floor(i / size);
-      const cls = c === "black" ? "black" : c === "white" ? "white" : "";
-      return `<button class="cell ${cls}" data-x="${x}" data-y="${y}" ${interactive ? "" : "disabled"}></button>`;
+      const stone = c === "black" ? "black" : c === "white" ? "white" : "";
+      const last =
+        lastMove && lastMove.x === x && lastMove.y === y ? " last" : "";
+      const hoshi = !c && HOSHI_9.has(`${x},${y}`) ? " hoshi" : "";
+      return `<button class="cell ${stone}${last}${hoshi}" data-x="${x}" data-y="${y}" ${interactive ? "" : "disabled"}></button>`;
     })
     .join("");
   return `<div class="board" style="grid-template-columns:repeat(${size},1fr)">${cells}</div>`;
@@ -485,10 +519,14 @@ function onTap(x: number, y: number) {
     const next = tryPlay(board, x, y);
     if (!next) return;
     board = next;
+    lastMove = { x, y };
     const mv = pickAiMove(board, 0);
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
-      if (after) board = after;
+      if (after) {
+        board = after;
+        lastMove = { x: mv.x, y: mv.y };
+      }
     }
     statusMsg = `${name()} · capt B${board.captured.black}/W${board.captured.white}`;
     render();
@@ -520,15 +558,18 @@ function handleBattleMove(x: number, y: number) {
     return;
   }
   board = next;
+  lastMove = { x, y };
   humanMoves++;
 
   if (mode === "place_n") {
     const need = lesson.battle.n ?? 10;
-    // AI replies weakly
-    const mv = pickAiMove(board, lesson.battle.aiLevel ?? 0);
+    const mv = pickAiMove(board, (lesson.battle.aiLevel as 0 | 1 | 2) ?? 0);
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
-      if (after) board = after;
+      if (after) {
+        board = after;
+        lastMove = { x: mv.x, y: mv.y };
+      }
     }
     statusMsg = `${humanMoves}/${need}`;
     if (humanMoves >= need) {
@@ -549,7 +590,10 @@ function handleBattleMove(x: number, y: number) {
     const mv = pickAiMove(board, (lesson.battle.aiLevel as 0 | 1 | 2) ?? 0);
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
-      if (after) board = after;
+      if (after) {
+        board = after;
+        lastMove = { x: mv.x, y: mv.y };
+      }
     }
     if (board.captured.black >= need) {
       void completeLesson(3);
@@ -764,7 +808,7 @@ function showBreak(on: boolean) {
   if (!el) return;
   el.classList.toggle("hidden", !on);
   const text = document.querySelector("#care-text");
-  if (text) text.textContent = t(locale, "care_far", { name: name() });
+  if (text) text.textContent = nextCareText(locale, name());
   if (on) {
     clock.pause();
     let left = 20;
@@ -788,8 +832,80 @@ function bindBreak() {
     showBreak(false);
     clock.resume();
   });
-  const care = document.querySelector("#care-text");
-  if (care) care.textContent = t(locale, "care_far", { name: name() });
+}
+
+async function renderParent() {
+  let body = `<p class="muted">…</p>`;
+  try {
+    const s = await api.parentSummary(locale);
+    const skills = s.skills
+      .map((sk) => `<li><strong>${escapeHtml(sk.lessonId)}</strong> · ${escapeHtml(sk.skill)} · ${"★".repeat(sk.stars)}</li>`)
+      .join("");
+    const badges = s.badges.length
+      ? s.badges.map((b) => `<span class="badge-pill">${escapeHtml(b.name)}</span>`).join(" ")
+      : `<span class="muted">—</span>`;
+    const tips = s.parentTips.map((t0) => `<li>${escapeHtml(t0)}</li>`).join("");
+    const next = s.nextLesson
+      ? `${t(locale, "next_stop")}: ${escapeHtml(s.nextLesson.id)} · ${escapeHtml(s.nextLesson.title)}`
+      : "";
+    body = `
+      <p class="story">${escapeHtml(s.headline)}</p>
+      <p class="muted">${escapeHtml(s.note)}</p>
+      <div class="stats">
+        <div><strong>${s.stats.completedCount}/${s.stats.totalLessons}</strong><br/>${t(locale, "progress")}</div>
+        <div><strong>${s.stats.totalStars}</strong><br/>${t(locale, "stars")}</div>
+        <div><strong>${s.stats.badgeCount}</strong><br/>${t(locale, "badges")}</div>
+        <div><strong>${s.stats.percent}%</strong><br/>%</div>
+      </div>
+      <h3>${t(locale, "badges")}</h3>
+      <div class="badge-row">${badges}</div>
+      <h3>${t(locale, "progress")}</h3>
+      <ul class="skill-list">${skills || "<li>—</li>"}</ul>
+      <p>${escapeHtml(next)}</p>
+      <h3>${t(locale, "parent")}</h3>
+      <ul>${tips}</ul>
+      <button class="primary" id="home">${t(locale, "home")}</button>
+    `;
+  } catch (e) {
+    body = `<p class="err">${escapeHtml(String((e as Error).message))}</p>
+      <button id="home">${t(locale, "home")}</button>`;
+  }
+  shell(`<div class="card">${body}</div>`);
+  document.querySelector("#home")?.addEventListener("click", () => {
+    route = "map";
+    void renderMap();
+  });
+}
+
+function renderPrivacy() {
+  const body =
+    locale === "zh-Hant"
+      ? `<h2>隱私說明</h2>
+        <ul>
+          <li>暱稱與進度存在你的 Cloudflare D1 帳號資料庫。</li>
+          <li>第三方 AI Key 只存在你的用戶設定，介面只顯示末四位。</li>
+          <li>無公開排行榜、無陌生人對戰。</li>
+          <li>教練可先走 Cloudflare 免費 AI；額度到了才用你填的第三方或本地句庫。</li>
+        </ul>`
+      : locale === "ja"
+        ? `<h2>プライバシー</h2>
+        <ul>
+          <li>ニックネームと進捗は Cloudflare D1 に保存されます。</li>
+          <li>第三者 API Key はあなたの設定にのみ保存（表示は末尾のみ）。</li>
+          <li>公開ランキングや見知らぬ人との対局はありません。</li>
+        </ul>`
+        : `<h2>Privacy</h2>
+        <ul>
+          <li>Nickname and progress are stored in your Cloudflare D1 database.</li>
+          <li>Third-party API keys stay in your account settings (UI shows last 4 chars only).</li>
+          <li>No public leaderboards or stranger matchmaking.</li>
+          <li>Coach uses Cloudflare free AI first, then your BYOK, then offline phrases.</li>
+        </ul>`;
+  shell(`<div class="card">${body}<button class="primary" id="home">${t(locale, "home")}</button></div>`);
+  document.querySelector("#home")?.addEventListener("click", () => {
+    route = "map";
+    void renderMap();
+  });
 }
 
 setInterval(() => {
