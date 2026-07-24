@@ -26,7 +26,7 @@ settings.get("/ai", async (c) => {
         id: "openrouter",
         label: "OpenRouter 免費模型（多模型開源）",
         baseUrl: "https://openrouter.ai/api/v1",
-        model: "meta-llama/llama-3.3-70b-instruct:free",
+        model: "openrouter/free",
         provider: "openai_compatible",
       },
       {

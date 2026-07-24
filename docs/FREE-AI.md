@@ -66,14 +66,15 @@ npx wrangler secret put GROQ_MODEL
 
 1. 開啟 https://openrouter.ai/  
 2. 註冊登入 → **Keys** → Create Key。  
-3. 免費模型例：`meta-llama/llama-3.3-70b-instruct:free`（列表會變，見 https://openrouter.ai/collections/free-models ）。  
+3. 免費模型建議用自動路由：`openrouter/free`（或見 https://openrouter.ai/collections/free-models ；`:free` 列表會變）。  
 4. 免費用量約 **50 次/日**；儲值 $10 可提高 free 模型日上限（非必須）。  
+5. 範例裡的 `openai/gpt-4o` **不是免費**，需 OpenRouter 餘額；本站預設走 free 路由。  
 
 ```bash
 npx wrangler secret put OPENROUTER_API_KEY
 # 可選
 npx wrangler secret put OPENROUTER_MODEL
-# meta-llama/llama-3.3-70b-instruct:free
+# openrouter/free
 ```
 
 ---
