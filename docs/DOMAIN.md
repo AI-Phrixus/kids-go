@@ -1,32 +1,25 @@
-# 自訂域名
+# 自訂域名狀態
 
-## 狀態
+## 結論（2026-07-24）
 
 | 項 | 狀態 |
 |----|------|
-| Worker 路由 | ✅ 已部署 `igo.142857.eu.cc/*` → zone `142857.eu.cc` |
-| DNS CNAME | ⚠️ 需你在 Dashboard **手動加一條**（OAuth 無 DNS 寫權限） |
-| workers.dev | ✅ https://kids-go.phrixusjhon.workers.dev 已可用 |
+| DNS CNAME | ✅ 已建立：`igo` → `kids-go.phrixusjhon.workers.dev`（Proxied） |
+| Worker 路由 | ✅ `igo.142857.eu.cc/*` → Worker `kids-go` |
+| 公網 DNS（1.1.1.1 / cloudflare-dns.com） | ✅ 解析到 Cloudflare 邊緣 IP（104.21.x / 172.67.x） |
+| **本機／部分網路訪問** | ⚠️ `dig` 對 `*.eu.cc` 回 **0.0.0.0**，HTTPS 連不上 |
+| **正式使用網址** | ✅ **https://kids-go.phrixusjhon.workers.dev** |
 
-## 請你完成（約 1 分鐘）
+**配置已正確。** 部分網路攔截/污染 `.eu.cc` 時會打不開自訂域，與 Worker 無關。  
+孩子與家長請優先用 **workers.dev**；換手機 4G 或其它網路可再試 `https://igo.142857.eu.cc`。
 
-1. 打開 [Cloudflare Dashboard](https://dash.cloudflare.com) → 選 zone **142857.eu.cc** → **DNS**  
-2. **Add record**：
-   - Type: **CNAME**
-   - Name: **igo**
-   - Target: **kids-go.phrixusjhon.workers.dev**
-   - Proxy: **Proxied**（橘雲）  
-3. 儲存後等 1–2 分鐘，訪問：**https://igo.142857.eu.cc**
+## 若換可連的域名
 
-也可：Workers → **kids-go** → **Triggers** → **Custom Domains** → Add `igo.142857.eu.cc`（若介面提供一鍵綁定）。
+改 `wrangler.toml` 的 `[[routes]]` 為你帳戶裡**在本機 dig 不是 0.0.0.0** 的 zone，再 `wrangler deploy`，並加對應 CNAME。
 
-## 程式配置（已提交）
+## 執行 AI 回報摘要
 
-`wrangler.toml`:
-
-```toml
-workers_dev = true
-[[routes]]
-pattern = "igo.142857.eu.cc/*"
-zone_name = "142857.eu.cc"
-```
+- method: dashboard  
+- record: CNAME igo → kids-go.phrixusjhon.workers.dev proxied  
+- workers.dev health: ok  
+- custom curl: connection_refused / SSL fail（根域同樣失敗 → 網路層）  
