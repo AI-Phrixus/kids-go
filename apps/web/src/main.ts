@@ -505,6 +505,7 @@ function renderLesson() {
     mid = `
       <h3>${t(locale, "battle")}</h3>
       <p>${pickLocaleText(locale, lesson.goal, name())}</p>
+      <label class="check"><input type="checkbox" id="libs" ${showLibs ? "checked" : ""}/> ${t(locale, "show_libs")}</label>
       ${boardHtml(board, true)}
       <div class="row">
         <button id="ask">${t(locale, "ask")}</button>
@@ -565,6 +566,11 @@ function renderLesson() {
     render();
   });
   document.querySelector("#ask")?.addEventListener("click", () => void askCoach());
+  document.querySelector("#libs")?.addEventListener("change", (e) => {
+    showLibs = (e.target as HTMLInputElement).checked;
+    localStorage.setItem("kids-go-libs", showLibs ? "1" : "0");
+    render();
+  });
   bindBoardClicks();
   bindBoardKeyboard();
 }
