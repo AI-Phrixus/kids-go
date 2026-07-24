@@ -33,8 +33,10 @@ progress.get("/lessons", async (c) => {
     const prevDone = !prev || map.get(prev.id)?.status === "completed";
     const row = map.get(l.id);
     let status = row?.status ?? (prevDone ? "in_progress" : "locked");
+    // Never show completed/unlocked if previous station is incomplete
     if (!prevDone) status = "locked";
-    if (prevDone && !row) status = "in_progress";
+    else if (row?.status === "completed") status = "completed";
+    else if (prevDone && !row) status = "in_progress";
     return {
       id: l.id,
       order: l.order,
@@ -42,7 +44,7 @@ progress.get("/lessons", async (c) => {
       status,
       stars: row?.stars ?? 0,
       badgeId: l.badgeId,
-      playable: true as const,
+      playable: prevDone,
     };
   });
 
@@ -85,6 +87,21 @@ progress.post("/progress/:lessonId", async (c) => {
   const lesson = getLesson(lessonId);
   if (!lesson) return c.json({ error: "not_found" }, 404);
 
+  // Sequential unlock: cannot complete/skip ahead of previous station
+  const idx = LESSONS.findIndex((l) => l.id === lessonId);
+  if (idx < 0) return c.json({ error: "not_found" }, 404);
+  if (idx > 0) {
+    const prev = LESSONS[idx - 1]!;
+    const prevRow = await c.env.DB.prepare(
+      `SELECT status FROM lesson_progress WHERE child_id = ? AND lesson_id = ?`,
+    )
+      .bind(sess.child.id, prev.id)
+      .first<{ status: string }>();
+    if (prevRow?.status !== "completed") {
+      return c.json({ error: "locked" }, 403);
+    }
+  }
+
   const body = await c.req.json<{
     status?: "in_progress" | "completed";
     stars?: number;
@@ -117,8 +134,7 @@ progress.post("/progress/:lessonId", async (c) => {
       .bind(sess.child.id, lesson.badgeId, now)
       .run();
 
-    // unlock next
-    const idx = LESSONS.findIndex((l) => l.id === lessonId);
+    // unlock next only when this lesson is legitimately sequential
     const next = LESSONS[idx + 1];
     if (next) {
       await c.env.DB.prepare(

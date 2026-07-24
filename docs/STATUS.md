@@ -1,6 +1,6 @@
 # 狀態快照
 
-> **版本**：v0.6.0  
+> **版本**：v0.6.1  
 > **更新**：2026-07-24  
 
 ## 網址
@@ -12,6 +12,14 @@
 | 備 | https://kids-go.phrixusjhon.workers.dev |
 
 GitHub：https://github.com/AI-Phrixus/kids-go  
+
+## v0.6.1 自檢修復
+
+- **P0**：禁止跳關 `POST /progress`（必須上一課 completed）  
+- 課表 `playable` 與 `locked` 對齊  
+- 教練鏈：CF → 站點免費額（Groq/OpenRouter/Gemini secrets）→ 用戶 BYOK → 句庫  
+- CF 模型改 8b-fast + 3b 回退；提示詞強制繁中  
+- 見 [FREE-AI.md](./FREE-AI.md)  
 
 ## v0.6 完善
 

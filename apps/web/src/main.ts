@@ -151,7 +151,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.6.0 · <span id="mins">0</span> min · Cloudflare Free
+      v0.6.1 · <span id="mins">0</span> min · Cloudflare Free
       · <a href="#" id="help-link">${t(locale, "help")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
@@ -468,6 +468,16 @@ function setupBoard(l: LessonDetail): BoardState {
   return b;
 }
 
+function cloneBoard(b: BoardState): BoardState {
+  return {
+    size: b.size,
+    grid: b.grid.slice(),
+    toPlay: b.toPlay,
+    captured: { black: b.captured.black, white: b.captured.white },
+    ko: b.ko,
+  };
+}
+
 function stepDots(): string {
   if (!lesson || phase !== "steps") return "";
   const total = Math.max(1, lesson.steps.length);
@@ -639,7 +649,7 @@ function renderFree() {
   document.querySelector("#mode-r10")?.addEventListener("click", () => resetBoard("race10", t(locale, "race10_goal")));
   document.querySelector("#pass")?.addEventListener("click", () => {
     if (boardBusy) return;
-    freeHistory.push(structuredClone(board));
+    freeHistory.push(cloneBoard(board));
     if (freeHistory.length > 40) freeHistory.shift();
     board = pass(board);
     consecutivePasses++;
@@ -801,7 +811,7 @@ function onTap(x: number, y: number) {
       render();
       return;
     }
-    freeHistory.push(structuredClone(board));
+    freeHistory.push(cloneBoard(board));
     if (freeHistory.length > 40) freeHistory.shift();
     board = next;
     lastMove = { x, y };

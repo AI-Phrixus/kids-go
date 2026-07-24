@@ -16,36 +16,43 @@ settings.get("/ai", async (c) => {
     config: publicAiConfig(cfg),
     presets: [
       {
-        id: "xai",
-        label: "xAI Grok（備援；仍先 CF 免費）",
-        baseUrl: "https://api.x.ai/v1",
-        model: "grok-4.5",
-        provider: "openai_compatible",
-      },
-      {
         id: "groq",
-        label: "Groq（備援；仍先 CF 免費）",
+        label: "Groq Llama 3.3 70B（推薦免費 · 高速開源）",
         baseUrl: "https://api.groq.com/openai/v1",
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         provider: "openai_compatible",
       },
       {
-        id: "openai",
-        label: "OpenAI（備援；仍先 CF 免費）",
-        baseUrl: "https://api.openai.com/v1",
-        model: "gpt-4o-mini",
+        id: "openrouter",
+        label: "OpenRouter 免費模型（多模型開源）",
+        baseUrl: "https://openrouter.ai/api/v1",
+        model: "meta-llama/llama-3.3-70b-instruct:free",
         provider: "openai_compatible",
       },
       {
         id: "google",
-        label: "Google Gemini（備援；仍先 CF 免費）",
+        label: "Google Gemini 免費額（Flash）",
         baseUrl: "",
         model: "gemini-2.0-flash",
         provider: "google",
       },
       {
+        id: "xai",
+        label: "xAI Grok",
+        baseUrl: "https://api.x.ai/v1",
+        model: "grok-4.5",
+        provider: "openai_compatible",
+      },
+      {
+        id: "openai",
+        label: "OpenAI",
+        baseUrl: "https://api.openai.com/v1",
+        model: "gpt-4o-mini",
+        provider: "openai_compatible",
+      },
+      {
         id: "custom",
-        label: "自訂 OpenAI 相容 URL（備援）",
+        label: "自訂 OpenAI 相容 URL",
         baseUrl: "",
         model: "",
         provider: "openai_compatible",
@@ -53,9 +60,9 @@ settings.get("/ai", async (c) => {
     ],
     hints: {
       zhHant:
-        "【優先順序固定】① Cloudflare 免費 AI → ② 下方第三方 URL/Key → ③ 本地句庫。填寫第三方不會跳過 CF，除非勾選「略過 CF」。軟上限防止超額。",
-      en: "Order is fixed: 1) CF free AI 2) third-party URL/key 3) static. Filling BYOK does NOT skip CF unless you check prefer BYOK. Soft cap prevents overage.",
-      ja: "順序固定：①CF無料 → ②第三者 → ③定型文。第三者を記入しても CF を飛ばしません（優先BYOKにチェックした場合を除く）。",
+        "【優先】① Cloudflare 免費 Workers AI → ② 站點設定的免費額 Key（Groq/OpenRouter/Gemini，見 docs/FREE-AI.md）→ ③ 你填的第三方 → ④ 本地句庫。勾選「略過 CF」才會先打第三方。兒童教練短句即可；70B 級免費額明顯比 CF 小模型更聰明。",
+      en: "Order: 1) CF free Workers AI 2) site free-tier keys (Groq/OpenRouter/Gemini) 3) your BYOK 4) static. Check prefer BYOK to skip CF first.",
+      ja: "順序：①CF無料 → ②サイト無料キー（Groq等）→ ③あなたのBYOK → ④定型文。",
     },
   });
 });

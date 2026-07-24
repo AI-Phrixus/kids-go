@@ -11,7 +11,7 @@ import settings from "./routes/settings";
 import { loadSession } from "./session";
 import type { Env } from "./types";
 
-const VERSION = "0.6.0";
+const VERSION = "0.6.1";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -56,8 +56,11 @@ app.get("/api/health", async (c) => {
       cfSuccessToday: status.cfSuccessToday,
       cfSoftMaxCalls: status.cfSoftMaxCalls,
       byokConfigured: status.byokConfigured,
+      freeTierConfigured: status.freeTierConfigured,
+      freeTierProviders: status.freeTierProviders,
       workersAiBound: status.workersAiBound,
       reminder: status.reminder,
+      chain: status.chain,
     },
   });
 });

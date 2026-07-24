@@ -36,5 +36,7 @@ zone_name = "142857.eu.cc"
 COACH_PROVIDER = "auto"
 COACH_TIMEOUT_MS = "5000"
 COACH_CF_SOFT_MAX_CALLS = "40"
-# Prefer smaller free model for lower latency on Free tier
-COACH_CF_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+# Free tier: low-latency CF model (falls back to 3b on error)
+COACH_CF_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
+# Optional free-tier secrets (set via: wrangler secret put GROQ_API_KEY / OPENROUTER_API_KEY / GOOGLE_API_KEY)
+# GROQ_MODEL / OPENROUTER_MODEL can also be secrets or left as code defaults

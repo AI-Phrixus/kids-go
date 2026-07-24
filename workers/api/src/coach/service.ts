@@ -37,11 +37,17 @@ export interface CoachEnv {
   XAI_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   GOOGLE_MODEL?: string;
+  /** Free-tier site secrets (optional) */
+  GROQ_API_KEY?: string;
+  GROQ_MODEL?: string;
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_MODEL?: string;
 }
 
 /**
  * Merge env + user BYOK credentials.
- * Chain: CF free FIRST → third-party → static (unless preferByok / none / workers_ai only).
+ * Chain: CF free FIRST → free env keys (Groq/OpenRouter/Gemini) → user BYOK → static
+ * (unless preferByok / none / workers_ai only).
  */
 export function buildEffectiveEnv(env: CoachEnv, userCfg?: AiConfig | null): {
   env: CoachEnv;
@@ -61,6 +67,7 @@ export function buildEffectiveEnv(env: CoachEnv, userCfg?: AiConfig | null): {
   const merged: CoachEnv = {
     ...env,
     COACH_PROVIDER: forceNone ? "none" : forceWorkersOnly ? "workers_ai" : "auto",
+    // Keep site free keys on env; user URL/key only override AI_* when present
     AI_BASE_URL: u.baseUrl || env.AI_BASE_URL,
     AI_API_KEY: u.apiKey || env.AI_API_KEY,
     AI_MODEL: u.model || env.AI_MODEL,
@@ -68,58 +75,105 @@ export function buildEffectiveEnv(env: CoachEnv, userCfg?: AiConfig | null): {
       u.provider === "xai" && u.apiKey
         ? u.apiKey
         : env.XAI_API_KEY || (u.baseUrl?.includes("x.ai") ? u.apiKey || undefined : undefined),
-    GOOGLE_API_KEY: u.provider === "google" && u.apiKey ? u.apiKey : env.GOOGLE_API_KEY,
-    GOOGLE_MODEL: u.provider === "google" && u.model ? u.model : env.GOOGLE_MODEL,
+    GOOGLE_API_KEY:
+      u.provider === "google" && u.apiKey ? u.apiKey : env.GOOGLE_API_KEY || u.apiKey || undefined,
+    GOOGLE_MODEL: (u.provider === "google" && u.model ? u.model : undefined) || env.GOOGLE_MODEL,
+    GROQ_API_KEY: env.GROQ_API_KEY,
+    GROQ_MODEL: env.GROQ_MODEL,
+    OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+    OPENROUTER_MODEL: env.OPENROUTER_MODEL,
   };
 
   return { env: merged, preferByok, forceNone, forceWorkersOnly };
 }
 
-/** Third-party only — called after CF free (or if preferByok). */
-function resolveByok(env: CoachEnv, userCfg?: AiConfig | null): CoachProvider | null {
+/** Ordered list of third-party / free-tier providers to try after CF (or first if preferByok). */
+function resolveProviderChain(env: CoachEnv, userCfg?: AiConfig | null): CoachProvider[] {
   const u = userCfg ?? EMPTY_AI_CONFIG;
+  const out: CoachProvider[] = [];
+  const seen = new Set<string>();
+
+  const push = (p: CoachProvider | null) => {
+    if (!p || seen.has(p.id + (p as { model?: string }).model)) return;
+    // dedupe by id + model string if any
+    const key = `${p.id}:${JSON.stringify(p)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(p);
+  };
+
   const kind = (u.provider || "auto").toLowerCase();
 
-  // Explicit Google
-  if (kind === "google") {
-    const key = env.GOOGLE_API_KEY || env.AI_API_KEY || u.apiKey;
-    if (!key) return null;
-    return createGoogleProvider({
-      apiKey: key,
-      model: env.GOOGLE_MODEL || env.AI_MODEL || u.model || "gemini-2.0-flash",
-    });
+  // 1) Explicit user BYOK (URL+key or google/xai)
+  if (u.apiKey && (u.baseUrl || kind === "google" || kind === "xai")) {
+    if (kind === "google") {
+      push(
+        createGoogleProvider({
+          apiKey: u.apiKey,
+          model: u.model || env.GOOGLE_MODEL || "gemini-2.0-flash",
+        }),
+      );
+    } else if (kind === "xai" || u.baseUrl?.includes("x.ai")) {
+      push(createXaiProvider(u.apiKey, u.model || "grok-4.5"));
+    } else if (u.baseUrl) {
+      push(
+        createOpenAICompatibleProvider({
+          baseUrl: u.baseUrl,
+          apiKey: u.apiKey,
+          model: u.model || "gpt-4o-mini",
+        }),
+      );
+    }
   }
 
-  // Explicit xAI or x.ai host
-  if (kind === "xai" || (env.AI_BASE_URL && env.AI_BASE_URL.includes("x.ai"))) {
-    const key = env.XAI_API_KEY || env.AI_API_KEY;
-    if (!key) return null;
-    return createXaiProvider(key, env.AI_MODEL || "grok-4.5");
+  // 2) Site free-tier secrets (high-quality OSS hosts) — no card, permanent free tiers
+  if (env.GROQ_API_KEY) {
+    push(
+      createOpenAICompatibleProvider({
+        baseUrl: "https://api.groq.com/openai/v1",
+        apiKey: env.GROQ_API_KEY,
+        model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
+      }),
+    );
+  }
+  if (env.OPENROUTER_API_KEY) {
+    push(
+      createOpenAICompatibleProvider({
+        baseUrl: "https://openrouter.ai/api/v1",
+        apiKey: env.OPENROUTER_API_KEY,
+        model: env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free",
+      }),
+    );
   }
 
-  // OpenAI-compatible URL+key (presets, custom)
+  // 3) Env Google free / env generic OpenAI-compatible / xAI
+  if (env.GOOGLE_API_KEY && kind !== "google") {
+    // only if not already pushed as user google
+    const alreadyGoogle = out.some((p) => p.id === "google");
+    if (!alreadyGoogle) {
+      push(
+        createGoogleProvider({
+          apiKey: env.GOOGLE_API_KEY,
+          model: env.GOOGLE_MODEL || env.AI_MODEL || "gemini-2.0-flash",
+        }),
+      );
+    }
+  }
   if (env.AI_BASE_URL && env.AI_API_KEY) {
-    return createOpenAICompatibleProvider({
-      baseUrl: env.AI_BASE_URL,
-      apiKey: env.AI_API_KEY,
-      model: env.AI_MODEL || "gpt-4o-mini",
-    });
+    // skip if same as user already
+    push(
+      createOpenAICompatibleProvider({
+        baseUrl: env.AI_BASE_URL,
+        apiKey: env.AI_API_KEY,
+        model: env.AI_MODEL || "gpt-4o-mini",
+      }),
+    );
+  }
+  if (env.XAI_API_KEY) {
+    push(createXaiProvider(env.XAI_API_KEY, env.AI_MODEL || "grok-4.5"));
   }
 
-  // auto + env-only Google key (no base URL)
-  if ((kind === "auto" || kind === "openai_compatible") && env.GOOGLE_API_KEY && !env.AI_BASE_URL) {
-    return createGoogleProvider({
-      apiKey: env.GOOGLE_API_KEY,
-      model: env.GOOGLE_MODEL || env.AI_MODEL || "gemini-2.0-flash",
-    });
-  }
-
-  // auto + env xai key only
-  if (kind === "auto" && env.XAI_API_KEY && !env.AI_BASE_URL) {
-    return createXaiProvider(env.XAI_API_KEY, env.AI_MODEL || "grok-4.5");
-  }
-
-  return null;
+  return out;
 }
 
 function parseJsonResponse(
@@ -169,6 +223,8 @@ export type CoachStatus = {
   cfSuccessToday: number;
   cfQuotaHitsToday: number;
   byokConfigured: boolean;
+  freeTierConfigured: boolean;
+  freeTierProviders: string[];
   workersAiBound: boolean;
   preferByok: boolean;
   alert: string | null;
@@ -203,14 +259,18 @@ export async function getCoachStatus(
       /* ignore */
     }
   }
-  const byok = resolveByok(effective, userCfg);
+  const chainProviders = resolveProviderChain(effective, userCfg);
+  const freeTier: string[] = [];
+  if (env.GROQ_API_KEY) freeTier.push("groq");
+  if (env.OPENROUTER_API_KEY) freeTier.push("openrouter");
+  if (env.GOOGLE_API_KEY) freeTier.push("google");
   const chain = forceNone
     ? "static"
     : preferByok
-      ? "byok → static"
+      ? "byok → free-tier → static"
       : forceWorkersOnly
         ? "cloudflare_free → static"
-        : "cloudflare_free → byok → static";
+        : "cloudflare_free → free-tier/byok → static";
 
   return {
     dayUtc: day,
@@ -219,13 +279,15 @@ export async function getCoachStatus(
     cfSoftMaxCalls: maxCalls,
     cfSuccessToday: q.cf_success,
     cfQuotaHitsToday: q.cf_fail_quota,
-    byokConfigured: !!byok,
+    byokConfigured: chainProviders.length > 0,
+    freeTierConfigured: freeTier.length > 0,
+    freeTierProviders: freeTier,
     workersAiBound: !!env.AI,
     preferByok,
     alert: q.last_alert,
     reminder: quotaStatusMessage(q, maxCalls, locale),
     billingNote:
-      "CF-first free AI. Soft cap then BYOK. Stay on Workers Free to avoid paid overage.",
+      "CF-first free AI. Then optional free-tier keys (Groq/OpenRouter/Gemini). Soft cap then static. Stay on Workers Free to avoid paid overage.",
   };
 }
 
@@ -239,7 +301,7 @@ export async function runCoach(
     userCfg,
   );
   const fallback = staticCoach(req);
-  const timeoutMs = Number(effective.COACH_TIMEOUT_MS ?? 2500);
+  const timeoutMs = Number(effective.COACH_TIMEOUT_MS ?? 5000);
   const maxTokens = Number(effective.COACH_MAX_TOKENS ?? 120);
   const temperature = Number(effective.COACH_TEMPERATURE ?? 0.5);
   const day = utcDay();
@@ -253,10 +315,10 @@ export async function runCoach(
   const chainLabel = forceNone
     ? "static"
     : preferByok
-      ? "byok→static"
+      ? "byok→free→static"
       : forceWorkersOnly
         ? "cf→static"
-        : "cf→byok→static";
+        : "cf→free/byok→static";
 
   if (forceNone) {
     if (env.DB) await bumpQuota(env.DB, day, "static_fallback").catch(() => undefined);
@@ -269,7 +331,9 @@ export async function runCoach(
     !preferByok && !!env.AI && (!quota || !shouldSkipWorkersAi(quota, maxCalls));
 
   if (tryCf && env.AI) {
-    const model = effective.COACH_CF_MODEL || "@cf/meta/llama-3.1-8b-instruct";
+    // Prefer low-latency free models within Workers Free neuron budget
+    const model =
+      effective.COACH_CF_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast";
     const provider = createWorkersAiProvider(env.AI, model);
     try {
       const text = await completeWithTimeout(provider, messages, maxTokens, temperature, timeoutMs);
@@ -304,6 +368,16 @@ export async function runCoach(
           ),
         ).catch(() => undefined);
       }
+      // try CF fallback model once
+      try {
+        const alt = createWorkersAiProvider(env.AI, "@cf/meta/llama-3.2-3b-instruct");
+        const text = await completeWithTimeout(alt, messages, maxTokens, temperature, timeoutMs);
+        if (env.DB) await bumpQuota(env.DB, day, "cf_success").catch(() => undefined);
+        const parsed = parseJsonResponse(text, fallback, "workers_ai");
+        return { ...parsed, chain: chainLabel };
+      } catch {
+        /* fall through */
+      }
     }
   } else if (!preferByok && quota && shouldSkipWorkersAi(quota, maxCalls) && env.DB) {
     await bumpQuota(env.DB, day, "cf_blocked_soft").catch(() => undefined);
@@ -318,8 +392,8 @@ export async function runCoach(
     };
   }
 
-  const byok = resolveByok(effective, userCfg);
-  if (byok) {
+  const providers = resolveProviderChain(effective, userCfg);
+  for (const byok of providers) {
     try {
       const text = await completeWithTimeout(byok, messages, maxTokens, temperature, timeoutMs);
       if (env.DB) await bumpQuota(env.DB, day, "byok_success").catch(() => undefined);
@@ -331,7 +405,7 @@ export async function runCoach(
         : undefined;
       return { ...parsed, reminder: rem, chain: chainLabel };
     } catch {
-      /* static */
+      /* try next */
     }
   }
 

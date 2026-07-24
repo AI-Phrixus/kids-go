@@ -19,6 +19,10 @@ export type Env = {
   XAI_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   GOOGLE_MODEL?: string;
+  GROQ_API_KEY?: string;
+  GROQ_MODEL?: string;
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_MODEL?: string;
 };
 
 export type AuthUser = {

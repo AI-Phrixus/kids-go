@@ -6,15 +6,22 @@ export function createOpenAICompatibleProvider(opts: {
   model: string;
 }): CoachProvider {
   const base = opts.baseUrl.replace(/\/$/, "");
+  const isOpenRouter = base.includes("openrouter.ai");
   return {
-    id: "openai_compatible",
+    id: isOpenRouter ? "openrouter" : base.includes("groq.com") ? "groq" : "openai_compatible",
     async complete(messages, { maxTokens, temperature }) {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${opts.apiKey}`,
+        "Content-Type": "application/json",
+      };
+      // OpenRouter recommends these for free-tier routing
+      if (isOpenRouter) {
+        headers["HTTP-Referer"] = "https://go.tdtc.indevs.in";
+        headers["X-Title"] = "Kids Igo";
+      }
       const res = await fetch(`${base}/chat/completions`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${opts.apiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           model: opts.model,
           messages,
