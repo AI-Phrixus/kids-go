@@ -34,18 +34,20 @@
 - **故事**：凡敘事以《西遊記》為藍本（悟空教練、休息站八戒幽默等）  
 - **眼**：20–20–20 與角色帶領的護眼儀式（遠眺、眼操…）  
 - **帳號**：家長郵箱 **或** 暱稱+PIN；進度綁孩子檔案  
+- **夥伴**：暱稱互加好友 + 短訊 + 邀請；可選暗號任務；舒服姿勢提示  
+- **說明**：遊戲內完整使用指南（三語 · 歡迎頁／地圖／頁腳）  
 
-**不是**職業強 AI 軟體，也**不依賴** Cloudflare 付費 AI。
+**不是**職業強 AI 軟體，也**不依賴** Cloudflare 付費 AI。無公開排行、無陌生人廣場。
 
 ---
 
 ## 架構（一句話）
 
 ```text
-Browser (Pages)  →  go-engine + 棋盤 + 西遊 UI + 休息鐘
+Browser  →  go-engine + 棋盤 + 西遊 UI + 好友聊天 + 站內說明 + 休息鐘
        │ Cookie session
-Workers Free (Hono)  →  D1 用戶/進度
-       └─ 可選 CoachProvider → 你的第三方 API（超時則本地句庫）
+Workers Free (Hono)  →  D1 用戶/進度/好友/訊息
+       └─ free_first 教練：Groq → OpenRouter free → Gemini free → CF soft → 句庫
 ```
 
 詳見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
