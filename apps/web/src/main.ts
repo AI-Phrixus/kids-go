@@ -35,7 +35,8 @@ let authTab: "quick" | "parent" | "login" = "quick";
 let completing = false;
 let coachBanner = "";
 let lastMove: { x: number; y: number } | null = null;
-let freeMode: FreeMode = "casual";
+let freeMode: FreeMode = (localStorage.getItem("kids-go-free-mode") as FreeMode) || "casual";
+if (freeMode !== "casual" && freeMode !== "race5" && freeMode !== "race10") freeMode = "casual";
 let lessonTotal = 20;
 let showLibs = localStorage.getItem("kids-go-libs") === "1";
 let freeHistory: BoardState[] = [];
@@ -430,9 +431,13 @@ async function renderMap() {
     freeHistory = [];
     humanMoves = 0;
     lastMove = null;
-    freeMode = "casual";
     consecutivePasses = 0;
-    statusMsg = "";
+    statusMsg =
+      freeMode === "race5"
+        ? t(locale, "race5_goal")
+        : freeMode === "race10"
+          ? t(locale, "race10_goal")
+          : "";
     boardBusy = false;
     route = "free";
     pushNav("free");
@@ -620,6 +625,7 @@ function renderFree() {
   document.querySelector("#ask")?.addEventListener("click", () => void askCoach());
   const resetBoard = (mode: FreeMode, msg: string) => {
     freeMode = mode;
+    localStorage.setItem("kids-go-free-mode", mode);
     board = createEmptyBoard(9);
     freeHistory = [];
     lastMove = null;
