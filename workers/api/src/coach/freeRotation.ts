@@ -17,7 +17,20 @@ import { EMPTY_AI_CONFIG } from "../ai-config";
 import { createGoogleProvider } from "./providers/google";
 import { createOpenAICompatibleProvider } from "./providers/openaiCompatible";
 import type { CoachProvider } from "./providers/types";
-import type { CoachEnv } from "./service";
+
+/** Minimal env shape for free rotation (avoid circular import with service.ts). */
+export type FreeRotationEnv = {
+  GROQ_API_KEY?: string;
+  GROQ_MODEL?: string;
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_MODEL?: string;
+  GOOGLE_API_KEY?: string;
+  GOOGLE_MODEL?: string;
+  AI_BASE_URL?: string;
+  AI_API_KEY?: string;
+  AI_MODEL?: string;
+  XAI_API_KEY?: string;
+};
 
 export type FreeSlot = {
   /** Stable id for health / logging */
@@ -62,7 +75,7 @@ export function rotateStart<T>(arr: T[], seed: number): T[] {
  * @param preferByok — user wants their BYOK first (may leave free path)
  */
 export function buildFreeFirstSlots(
-  env: CoachEnv,
+  env: FreeRotationEnv,
   userCfg?: AiConfig | null,
   preferByok = false,
 ): FreeSlot[] {

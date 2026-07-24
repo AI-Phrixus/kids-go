@@ -47,24 +47,33 @@ async function loadUserAiConfig(env: Env, cookie: string | undefined) {
 }
 
 app.get("/api/health", async (c) => {
-  const status = await getCoachStatus(c.env, "en");
-  return c.json({
-    ok: true,
-    version: VERSION,
-    coachProvider: c.env.COACH_PROVIDER ?? "auto",
-    coach: {
-      cfSuccessToday: status.cfSuccessToday,
-      cfSoftMaxCalls: status.cfSoftMaxCalls,
-      byokConfigured: status.byokConfigured,
-      freeTierConfigured: status.freeTierConfigured,
-      freeTierProviders: status.freeTierProviders,
-      freePriority: status.freePriority,
-      freeFirst: status.freeFirst,
-      workersAiBound: status.workersAiBound,
-      reminder: status.reminder,
-      chain: status.chain,
-    },
-  });
+  try {
+    const status = await getCoachStatus(c.env, "en");
+    return c.json({
+      ok: true,
+      version: VERSION,
+      coachProvider: c.env.COACH_PROVIDER ?? "auto",
+      coach: {
+        cfSuccessToday: status.cfSuccessToday,
+        cfSoftMaxCalls: status.cfSoftMaxCalls,
+        byokConfigured: status.byokConfigured,
+        freeTierConfigured: status.freeTierConfigured,
+        freeTierProviders: status.freeTierProviders,
+        freePriority: status.freePriority,
+        freeFirst: status.freeFirst,
+        workersAiBound: status.workersAiBound,
+        reminder: status.reminder,
+        chain: status.chain,
+      },
+    });
+  } catch (e) {
+    return c.json({
+      ok: true,
+      version: VERSION,
+      coachProvider: c.env.COACH_PROVIDER ?? "auto",
+      coachError: String(e instanceof Error ? e.message : e).slice(0, 200),
+    });
+  }
 });
 
 app.get("/api/coach/status", async (c) => {

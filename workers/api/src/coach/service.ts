@@ -192,7 +192,7 @@ export async function getCoachStatus(
     dayUtc: day,
     mode: effective.COACH_PROVIDER || "auto",
     chain,
-    freePriority: freePriorityLabel(slots) || freeTiers.join(" → ") || "none",
+    freePriority: freePriorityLabel(slots) || freeTier.join(" → ") || "none",
     cfSoftMaxCalls: maxCalls,
     cfSuccessToday: q.cf_success,
     cfQuotaHitsToday: q.cf_fail_quota,
