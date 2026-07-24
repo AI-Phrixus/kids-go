@@ -13,7 +13,7 @@
 | **URL** | **https://kids-go.phrixusjhon.workers.dev** |
 | 健康檢查 | `GET /api/health` |
 | 教練狀態 | `GET /api/coach/status?locale=zh-Hant` |
-| Cloudflare 帳號 | phrixusjhon@gmail.com · Free 建議維持 |
+| Cloudflare 帳號 | phrixusjhon@gmail.com · **已確認 Workers Free**（2026-07-24） |
 | D1 | `kids-go` · `35d8acbd-2abd-4a68-b62e-88dfa1f0fd0d` · APAC |
 | Workers AI | 已綁定 `env.AI` · **鏈**：`cloudflare_free → byok → static` |
 | 軟上限 | 40 次 CF 教練／UTC 日 → 再第三方／靜態（防超額） |
