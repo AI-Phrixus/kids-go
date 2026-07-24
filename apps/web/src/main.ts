@@ -16,6 +16,7 @@ import { EyeCareClock } from "./eyecare";
 import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
 import { mascotSvg } from "./mascot";
 import { setSfxEnabled, sfx, sfxEnabled } from "./sfx";
+import { guideBodyHtml, guideTocHtml } from "./guide";
 import { checkTyping, pickPracticePhrase, targetHtml } from "./typing";
 
 type Route = "welcome" | "map" | "lesson" | "free" | "settings" | "parent" | "privacy" | "help";
@@ -169,8 +170,8 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.7.2 · <span id="mins">0</span> min · free AI rotate
-      · <a href="#" id="help-link">${t(locale, "help")}</a>
+      v0.7.3 · <span id="mins">0</span> min · free AI rotate
+      · <a href="#" id="help-link">${t(locale, "guide")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
     </p>
@@ -238,8 +239,17 @@ function renderWelcome() {
       </div>
       <div id="auth-form"></div>
       <p class="err" id="err" role="alert"></p>
+      <p class="muted" style="margin-top:0.75rem">
+        <a href="#" id="welcome-guide">${t(locale, "guide")}</a>
+      </p>
     </div>
   `);
+  document.querySelector("#welcome-guide")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    route = "help";
+    pushNav("help");
+    render();
+  });
   document.querySelectorAll("[data-tab]").forEach((b) =>
     b.addEventListener("click", () => {
       authTab = (b as HTMLElement).dataset.tab as typeof authTab;
@@ -418,6 +428,7 @@ async function renderMap() {
         <h2>${t(locale, "journey")} · ${escapeHtml(name())}</h2>
         <div class="row">
           <button id="friends" class="primary">${t(locale, "friends")}</button>
+          <button id="guide-btn">${t(locale, "guide")}</button>
           <button id="parent">${t(locale, "parent")}</button>
           <button id="settings">${t(locale, "settings")}</button>
           <button id="logout">${t(locale, "logout")}</button>
@@ -457,6 +468,11 @@ async function renderMap() {
   document.querySelector("#friends2")?.addEventListener("click", () => {
     friendsTab = "share";
     openFriends();
+  });
+  document.querySelector("#guide-btn")?.addEventListener("click", () => {
+    route = "help";
+    pushNav("help");
+    render();
   });
   document.querySelector("#free")?.addEventListener("click", () => {
     board = createEmptyBoard(9);
@@ -1478,13 +1494,34 @@ async function sendChat() {
 
 function renderHelp() {
   shell(`
-    <div class="card privacy">
-      <h2>${t(locale, "help_title")}</h2>
-      <p class="story">${t(locale, "help_body")}</p>
-      <button class="primary" id="home">${t(locale, "home")}</button>
+    <div class="card privacy guide-card">
+      <div class="row between">
+        <h2>${t(locale, "guide_title")}</h2>
+        <button type="button" class="primary" id="home">${t(locale, "home")}</button>
+      </div>
+      <p class="story muted">${t(locale, "guide_intro")}</p>
+      <nav class="guide-toc" aria-label="TOC">${guideTocHtml(locale)}</nav>
+      <div class="guide-body">${guideBodyHtml(locale)}</div>
+      <div class="row">
+        <button type="button" class="primary" id="home2">${t(locale, "home")}</button>
+        <button type="button" id="guide-top">${t(locale, "guide_top")}</button>
+      </div>
     </div>
   `);
   document.querySelector("#home")?.addEventListener("click", () => goHome());
+  document.querySelector("#home2")?.addEventListener("click", () => goHome());
+  document.querySelector("#guide-top")?.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  // smooth scroll for TOC anchors inside app
+  document.querySelectorAll(".guide-toc-link").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = (a as HTMLAnchorElement).getAttribute("href")?.slice(1);
+      if (!id) return;
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
 }
 
 async function renderParent() {

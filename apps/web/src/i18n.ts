@@ -129,6 +129,10 @@ const dict: Record<Locale, Record<string, string>> = {
     type_hint: "遊びだよ：合図をそろえると友だちへ届く。間違いはやり直しのチャンス。",
     type_stats: "合図クリア {{n}} 回",
     type_posture: "らくな姿勢ヒント",
+    guide: "遊び方ガイド",
+    guide_title: "Kids Igo 完全ガイド",
+    guide_intro: "はじめに読むと安心。目次をタップしてジャンプできます。",
+    guide_top: "いちばん上へ",
   },
   "zh-Hant": {
     title: "Kids Igo · 西遊圍棋",
@@ -258,6 +262,10 @@ const dict: Record<Locale, Record<string, string>> = {
     type_hint: "這是玩法：對上暗號就傳訊成功。打錯沒關係，再試一次就好。",
     type_stats: "暗號通關 {{n}} 次",
     type_posture: "舒服姿勢小提示",
+    guide: "遊戲說明",
+    guide_title: "Kids Igo 完整使用說明",
+    guide_intro: "建議先快速瀏覽。點目錄可跳到各章節。",
+    guide_top: "回到頂部",
   },
   en: {
     title: "Kids Igo · Journey Go",
@@ -388,6 +396,10 @@ const dict: Record<Locale, Record<string, string>> = {
     type_hint: "It's a game: match the signal to message your friend. Misses just mean another try.",
     type_stats: "Signals cleared: {{n}}",
     type_posture: "Comfy posture tip",
+    guide: "How to play",
+    guide_title: "Kids Igo complete guide",
+    guide_intro: "Read this once, then jump via the table of contents.",
+    guide_top: "Back to top",
   },
 };
 
