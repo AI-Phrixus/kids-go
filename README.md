@@ -8,8 +8,8 @@
 
 | | |
 |--|--|
-| **版本** | v0.3.0 · L01–L16 |
-| **線上** | https://kids-go.phrixusjhon.workers.dev |
+| **版本** | v0.4.0 · L01–L20 |
+| **線上** | https://igo.142857.eu.cc · https://kids-go.phrixusjhon.workers.dev |
 | **目標年齡** | 約 10–11 歲（小四 · 暑假→下學期） |
 | **UI 語言** | 日本語 · 繁體中文 · English |
 | **部署** | Cloudflare Pages + Workers Free + D1 Free |

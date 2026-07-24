@@ -131,6 +131,23 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ locale }),
     }),
+  track: (event: string, payload?: unknown) =>
+    req("/api/events", {
+      method: "POST",
+      body: JSON.stringify({ event, payload: payload ?? {} }),
+    }).catch(() => ({ ok: false })),
+  usageStats: () =>
+    req<{
+      summary: {
+        sessions: number;
+        lessonsCompleted: number;
+        eyeBreaks: number;
+        freePlays: number;
+        coachHints: number;
+        breakPerLesson: number;
+      };
+      counts: Record<string, number>;
+    }>("/api/stats"),
 };
 
 export type LessonDetail = {

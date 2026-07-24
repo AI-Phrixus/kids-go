@@ -723,9 +723,156 @@ export const LESSONS: LessonMeta[] = [
       tap("點 (5,6) 完成提子練習。", "(5,6)で取ろう。", "Tap (5,6) to capture.", [[5, 6]]),
     ],
   },
+  {
+    id: "L17",
+    boardSize: 9,
+    order: 17,
+    badgeId: "ladder2",
+    skillTag: T.title("征子多步", "シチョウ多手", "Ladder multi-step"),
+    titles: T.title("筋斗雲 · 征子多步", "シチョウ多手", "Ladder multi-step"),
+    story: T.story(
+      "{{name}}，征子要追兩步：先叫吃，對方逃，你再叫吃——方向對就能追上！",
+      "{{name}}、シチョウは二手追う。方向が命！",
+      "{{name}}, ladder needs two chase moves — keep the atari direction!",
+    ),
+    goal: T.story("完成征子追擊並提子", "シチョウで取る", "Chase ladder and capture"),
+    battle: {
+      mode: "capture_n",
+      n: 1,
+      aiLevel: 0,
+      setup: [
+        { x: 1, y: 1, color: "white" },
+        { x: 0, y: 1, color: "black" },
+        { x: 1, y: 0, color: "black" },
+        { x: 2, y: 0, color: "black" },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "征子多步：①叫吃 ②對方逃 ③你再叫吃。每一步都堵「往外的氣」。",
+        "アタリ→逃げ→アタリ。",
+        "Atari → escape → atari again.",
+      ),
+      tap("第一步追：點 (2,1) 叫吃！", "第一步(2,1)！", "Step 1: atari at (2,1)!", [[2, 1]]),
+      tap("若白逃到 (2,2)，第二步點 (3,2) 繼續追（或直接吃到的點）。", "続けて追う。", "Step 2: keep chasing (e.g. 3,2).", [
+        [3, 2],
+        [2, 2],
+        [3, 1],
+        [1, 2],
+      ]),
+    ],
+  },
+  {
+    id: "L18",
+    boardSize: 9,
+    order: 18,
+    badgeId: "snapback",
+    skillTag: T.title("倒撲入門", "ウッテガエシ", "Snapback intro"),
+    titles: T.title("乾坤倒轉 · 倒撲", "ウッテガエシ", "Snapback"),
+    story: T.story(
+      "{{name}}，倒撲：對方以為吃了你，結果被你反吃——像筋斗翻轉！",
+      "{{name}}、取ったつもりが取られる！",
+      "{{name}}, snapback: they think they capture you — you capture more!",
+    ),
+    goal: T.story("完成吃子練習，體會反吃", "取りで反転を感じる", "Capture and feel the reversal"),
+    battle: {
+      mode: "capture_n",
+      n: 1,
+      aiLevel: 0,
+      setup: [
+        { x: 4, y: 4, color: "white" },
+        { x: 3, y: 4, color: "black" },
+        { x: 5, y: 4, color: "black" },
+        { x: 4, y: 3, color: "black" },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "倒撲：有時「送一頭」再吃回更多。啟蒙先記：提子前要想一步。",
+        "取る前に一手読む。",
+        "Before capturing, read one more move — snapback ideas.",
+      ),
+      tap("點 (4,5) 提白。", "(4,5)で取ろう。", "Capture at (4,5).", [[4, 5]]),
+    ],
+  },
+  {
+    id: "L19",
+    boardSize: 9,
+    order: 19,
+    badgeId: "liberty_race",
+    skillTag: T.title("對殺入門（氣多少）", "セメアイ入門", "Capturing race intro"),
+    titles: T.title("對峙 · 氣的對殺", "気の戦い", "Liberty race"),
+    story: T.story(
+      "{{name}}，兩邊都要死活時：比誰的氣更少、誰先動手——這是對殺入門。",
+      "{{name}}、気の数を比べよう！",
+      "{{name}}, when both groups are in danger: compare liberties!",
+    ),
+    goal: T.story("數氣並完成吃子", "気を数えて取る", "Count liberties and capture"),
+    battle: {
+      mode: "capture_n",
+      n: 1,
+      aiLevel: 0,
+      setup: [
+        { x: 3, y: 3, color: "white" },
+        { x: 2, y: 3, color: "black" },
+        { x: 4, y: 3, color: "black" },
+        { x: 3, y: 2, color: "black" },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "對殺：先數雙方氣。氣少的一方更危險。",
+        "気の少ない方が危ない。",
+        "Fewer liberties = more danger.",
+      ),
+      tap("白只剩 1 氣，點 (3,4) 先吃掉！", "(3,4)で取ろう！", "Capture at (3,4)!", [[3, 4]]),
+    ],
+  },
+  {
+    id: "L20",
+    boardSize: 9,
+    order: 20,
+    badgeId: "graduation",
+    skillTag: T.title("啟蒙畢業綜合", "入門卒業", "Foundation graduation"),
+    titles: T.title("西天門 · 啟蒙畢業", "西天門 · 卒業", "West gate · Graduation"),
+    story: T.story(
+      "{{name}}，西天門前：氣、吃、叫吃、連斷、金角銀邊、門吃抱吃——全部用上，畢業啦！",
+      "{{name}}、入門の総仕上げ！",
+      "{{name}}, graduation: use everything you've learned!",
+    ),
+    goal: T.story("吃掉 2 子通過畢業關", "2子取って卒業", "Capture 2 stones to graduate"),
+    battle: {
+      mode: "capture_n",
+      n: 2,
+      aiLevel: 0,
+      setup: [
+        { x: 2, y: 2, color: "white" },
+        { x: 1, y: 2, color: "black" },
+        { x: 3, y: 2, color: "black" },
+        { x: 2, y: 1, color: "black" },
+        { x: 6, y: 6, color: "white" },
+        { x: 5, y: 6, color: "black" },
+        { x: 7, y: 6, color: "black" },
+        { x: 6, y: 5, color: "black" },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "畢業清單：數氣、叫吃、吃子、連接、切斷、金角銀邊、門吃抱吃、征劫概念。",
+        "気・アタリ・取り・連結・角辺・門・シチョウ・コウ。",
+        "Liberties, atari, capture, connect, corners, nets, ladder, ko.",
+      ),
+      tap("先吃第一子 (2,3)。", "まず(2,3)。", "First capture (2,3).", [[2, 3]]),
+    ],
+  },
 ];
 
 export function getLesson(id: string): LessonMeta | undefined {
   return LESSONS.find((l) => l.id === id);
 }
+
 

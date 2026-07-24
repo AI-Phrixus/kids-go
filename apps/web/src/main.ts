@@ -13,6 +13,8 @@ import { api, type LessonDetail } from "./api";
 import { nextCareText } from "./care-rituals";
 import { EyeCareClock } from "./eyecare";
 import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
+import { mascotSvg } from "./mascot";
+import { setSfxEnabled, sfx, sfxEnabled } from "./sfx";
 
 type Route = "welcome" | "map" | "lesson" | "free" | "settings" | "parent" | "privacy";
 type FreeMode = "casual" | "race5" | "race10";
@@ -32,7 +34,7 @@ let completing = false;
 let coachBanner = "";
 let lastMove: { x: number; y: number } | null = null;
 let freeMode: FreeMode = "casual";
-let lessonTotal = 16;
+let lessonTotal = 20;
 
 const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20 });
 clock.onBreak = () => showBreak(true);
@@ -56,6 +58,7 @@ async function boot() {
       saveLocale();
     }
     route = "map";
+    void api.track("session_start");
   } catch {
     route = "welcome";
   }
@@ -99,10 +102,15 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.3.0 · <span id="mins">0</span> min · Cloudflare Free
+      v0.4.0 · <span id="mins">0</span> min · Cloudflare Free
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
+      · <button type="button" class="linkish" id="sfx-toggle">${sfxEnabled() ? "🔊" : "🔇"}</button>
     </p>
   `;
+  document.querySelector("#sfx-toggle")?.addEventListener("click", () => {
+    setSfxEnabled(!sfxEnabled());
+    render();
+  });
   document.querySelector("#privacy-link")?.addEventListener("click", (e) => {
     e.preventDefault();
     route = "privacy";
@@ -126,8 +134,13 @@ function escapeHtml(s: string): string {
 
 function renderWelcome() {
   shell(`
-    <div class="card">
-      <h2>${t(locale, "welcome")}</h2>
+    <div class="card welcome-hero">
+      <div class="hero-row">${mascotSvg("idle")}
+        <div>
+          <h2>${t(locale, "welcome")}</h2>
+          <p class="muted">${locale === "zh-Hant" ? "跟著悟空學圍棋 · 金角銀邊草肚皮" : "Learn Go with Wukong"}</p>
+        </div>
+      </div>
       <div class="tabs">
         <button data-tab="quick" class="${authTab === "quick" ? "on" : ""}">${t(locale, "quick_reg")}</button>
         <button data-tab="parent" class="${authTab === "parent" ? "on" : ""}">${t(locale, "parent_reg")}</button>
@@ -305,6 +318,7 @@ async function renderMap() {
     freeMode = "casual";
     statusMsg = "";
     route = "free";
+    void api.track("free_play_start", { mode: freeMode });
     render();
   });
   document.querySelectorAll(".lesson:not(.locked)").forEach((btn) => {
@@ -321,6 +335,7 @@ async function renderMap() {
         board = setupBoard(lesson);
         lastMove = null;
         route = "lesson";
+        void api.track("lesson_start", { lessonId });
         render();
       } catch (e) {
         statusMsg = String((e as Error).message);
@@ -381,8 +396,12 @@ function renderLesson() {
       <p class="bubble">${escapeHtml(statusMsg)}</p>`;
   } else {
     mid = `
-      <h2 class="win">${t(locale, "win")}</h2>
-      <p>${escapeHtml(name())} ★★☆ · ${escapeHtml(lesson.badgeId)}</p>
+      <div class="win-hero">${mascotSvg("win")}
+        <div>
+          <h2 class="win">${t(locale, "win")}</h2>
+          <p>${escapeHtml(name())} ★★☆ · ${escapeHtml(lesson.badgeId)}</p>
+        </div>
+      </div>
       <div class="row">
         <button class="primary" id="home">${t(locale, "home")}</button>
         <button id="again">${t(locale, "again")}</button>
@@ -392,7 +411,10 @@ function renderLesson() {
 
   shell(`
     <div class="card">
-      <h2>${lesson.id} · ${escapeHtml(title)}</h2>
+      <div class="row between">
+        <h2>${lesson.id} · ${escapeHtml(title)}</h2>
+        ${phase === "steps" ? mascotSvg("idle") : ""}
+      </div>
       ${mid}
     </div>
   `);
@@ -538,18 +560,19 @@ function onTap(x: number, y: number) {
     if (step?.type === "tap") {
       const ok = step.correct.some(([cx, cy]) => cx === x && cy === y);
       if (ok) {
+        sfx.ok();
         statusMsg =
           locale === "zh-Hant"
             ? `${name()}，答對了！`
             : locale === "ja"
               ? `${name()}、せいかい！`
               : `${name()}, correct!`;
-        // place a mark on board for feedback if empty
         if (!board.grid[idx(board.size, x, y)]) {
           const next = tryPlay(board, x, y);
           if (next) {
             board = next;
             lastMove = { x, y };
+            sfx.place();
           }
         } else {
           lastMove = { x, y };
@@ -563,6 +586,7 @@ function onTap(x: number, y: number) {
         }
         render();
       } else {
+        sfx.wrong();
         statusMsg =
           locale === "zh-Hant"
             ? "再找找看～想想口訣或數一數氣。"
@@ -587,6 +611,8 @@ function onTap(x: number, y: number) {
     const target = freeMode === "race5" ? 5 : freeMode === "race10" ? 10 : 0;
     let win = target ? captureRaceWinner(board.captured, target) : null;
     if (win === "black") {
+      sfx.win();
+      void api.track("capture_race_win", { target });
       statusMsg =
         locale === "zh-Hant" ? `${name()} 獲勝！先吃滿 ${target} 子！` : `${name()} wins! First to ${target}!`;
       render();
@@ -641,6 +667,10 @@ function handleBattleMove(x: number, y: number) {
   board = next;
   lastMove = { x, y };
   humanMoves++;
+  sfx.place();
+  if (board.captured.black > 0 || board.captured.white > 0) {
+    /* capture sound if last move captured — approximate */
+  }
 
   if (mode === "place_n") {
     const need = lesson.battle.n ?? 10;
@@ -664,6 +694,7 @@ function handleBattleMove(x: number, y: number) {
   if (mode === "capture_n") {
     const need = lesson.battle.n ?? 1;
     if (board.captured.black >= need) {
+      sfx.capture();
       void completeLesson(3);
       return;
     }
@@ -709,6 +740,8 @@ async function completeLesson(stars: number) {
       aiLevel: lesson.battle.aiLevel ?? 0,
       moves: [],
     });
+    void api.track("lesson_complete", { lessonId: lesson.id, stars });
+    sfx.win();
     try {
       const c = await api.coach({
         tone: "celebrate",
@@ -730,6 +763,7 @@ async function completeLesson(stars: number) {
 
 async function askCoach() {
   try {
+    void api.track("coach_hint", { lessonId });
     const c = await api.coach({
       tone: "hint",
       speaker: "wukong",
@@ -758,6 +792,7 @@ function showBreak(on: boolean) {
   if (text) text.textContent = nextCareText(locale, name());
   if (on) {
     clock.pause();
+    sfx.break();
     let left = 20;
     const cd = document.querySelector("#countdown");
     const done = document.querySelector("#care-done") as HTMLButtonElement | null;
@@ -778,6 +813,7 @@ function bindBreak() {
   document.querySelector("#care-done")?.addEventListener("click", () => {
     showBreak(false);
     clock.resume();
+    void api.track("break_complete");
   });
 }
 
@@ -785,6 +821,21 @@ async function renderParent() {
   let body = `<p class="muted">…</p>`;
   try {
     const s = await api.parentSummary(locale);
+    let usageHtml = "";
+    try {
+      const u = await api.usageStats();
+      usageHtml = `
+        <h3>${locale === "zh-Hant" ? "近 30 日使用（暑假觀察）" : "Last 30 days"}</h3>
+        <div class="stats">
+          <div><strong>${u.summary.sessions}</strong><br/>sessions</div>
+          <div><strong>${u.summary.lessonsCompleted}</strong><br/>lessons</div>
+          <div><strong>${u.summary.eyeBreaks}</strong><br/>eye breaks</div>
+          <div><strong>${u.summary.freePlays}</strong><br/>free play</div>
+        </div>
+        <p class="muted">${locale === "zh-Hant" ? "護眼休息／通關比" : "Breaks per clear"}: ${u.summary.breakPerLesson}</p>`;
+    } catch {
+      usageHtml = "";
+    }
     const skills = s.skills
       .map(
         (sk) =>
@@ -807,6 +858,7 @@ async function renderParent() {
         <div><strong>${s.stats.badgeCount}</strong><br/>${t(locale, "badges")}</div>
         <div><strong>${s.stats.percent}%</strong><br/>%</div>
       </div>
+      ${usageHtml}
       <h3>${t(locale, "badges")}</h3>
       <div class="badge-row">${badges}</div>
       <h3>${t(locale, "progress")}</h3>
@@ -830,28 +882,53 @@ async function renderParent() {
 function renderPrivacy() {
   const body =
     locale === "zh-Hant"
-      ? `<h2>隱私說明</h2>
+      ? `<h2>隱私與資料說明</h2>
+        <p>本服務「Kids Igo」供家庭學習圍棋使用，部署於 Cloudflare。</p>
+        <h3>我們收集什麼</h3>
         <ul>
-          <li>暱稱與進度存在 Cloudflare D1。</li>
-          <li>第三方 AI Key 只存在你的設定，介面只顯示末四位。</li>
-          <li>無公開排行榜、無陌生人對戰。</li>
-          <li>教練：Cloudflare 免費 AI → 第三方 → 本地句庫。</li>
+          <li><strong>帳號</strong>：家長郵箱（可選）或暱稱+PIN；密碼／PIN 僅存雜湊。</li>
+          <li><strong>進度</strong>：課通關、星數、徽章、對局摘要。</li>
+          <li><strong>使用事件</strong>（近 30 日統計用）：開局、通關、護眼休息、自由對弈、教練提示次數——不含聊天全文。</li>
+          <li><strong>AI 設定</strong>：你自願填寫的第三方 Base URL／API Key／Model（Key 回傳只顯示末四位）。</li>
+        </ul>
+        <h3>我們不做什麼</h3>
+        <ul>
+          <li>無公開排行榜、無陌生人對戰、不出售個資。</li>
+          <li>不強制收集真實姓名、學校、地理位置。</li>
+        </ul>
+        <h3>AI 與跨境</h3>
+        <ul>
+          <li>預設優先 Cloudflare Workers AI（免費額）；額度到了才用你設定的第三方或本地句庫。</li>
+          <li>若使用第三方 API，請求內容（盤面摘要、暱稱）會送往該供應商，受其隱私政策約束。</li>
+        </ul>
+        <h3>兒童與家長</h3>
+        <ul>
+          <li>建議由家長協助註冊與保管 PIN／郵箱。</li>
+          <li>「家長摘要」僅供已登入家庭帳號查看該孩子進度。</li>
+        </ul>
+        <h3>保存與刪除</h3>
+        <ul>
+          <li>資料保存在你的 Cloudflare 帳戶下 D1；操作者可依 Cloudflare 工具匯出或清除。</li>
+          <li>若需刪帳，請聯繫部署者（本專案自建）。</li>
         </ul>`
       : locale === "ja"
         ? `<h2>プライバシー</h2>
         <ul>
-          <li>進捗は Cloudflare D1 に保存。</li>
-          <li>API Key は設定にのみ保存（末尾のみ表示）。</li>
-          <li>公開ランキングなし。</li>
+          <li>進捗・バッジ・利用イベント（通関・休憩など）を D1 に保存。</li>
+          <li>API Key は設定のみ。公開ランキングなし。</li>
+          <li>AI は CF 無料→第三者→定型文。第三者利用時はその規約に従う。</li>
         </ul>`
         : `<h2>Privacy</h2>
+        <p>Kids Igo stores account, progress, and aggregate usage events (lesson clear, eye breaks) in your Cloudflare D1.</p>
         <ul>
-          <li>Progress stored in Cloudflare D1.</li>
-          <li>API keys in your settings only (last 4 chars shown).</li>
-          <li>No public leaderboards.</li>
-          <li>Coach: CF free AI → BYOK → offline phrases.</li>
+          <li>No public leaderboards or stranger matchmaking.</li>
+          <li>Optional third-party AI keys stay in your settings (last 4 chars shown).</li>
+          <li>Coach: Cloudflare free AI first, then your BYOK, then offline phrases.</li>
+          <li>Parents should help manage PIN/email for children.</li>
         </ul>`;
-  shell(`<div class="card">${body}<button class="primary" id="home">${t(locale, "home")}</button></div>`);
+  shell(
+    `<div class="card privacy">${body}<button class="primary" id="home">${t(locale, "home")}</button></div>`,
+  );
   document.querySelector("#home")?.addEventListener("click", () => {
     route = "map";
     void renderMap();

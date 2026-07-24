@@ -1,6 +1,7 @@
 name = "kids-go"
 main = "workers/api/src/entry.ts"
 compatibility_date = "2025-07-05"
+workers_dev = true
 
 [[d1_databases]]
 binding = "DB"
@@ -8,7 +9,7 @@ database_name = "kids-go"
 database_id = "35d8acbd-2abd-4a68-b62e-88dfa1f0fd0d"
 migrations_dir = "migrations"
 
-# Cloudflare Workers AI (free tier: stay on Workers Free for hard stop, no overage bill)
+# Cloudflare Workers AI (free tier hard-stop when plan stays Free)
 [ai]
 binding = "AI"
 
@@ -17,10 +18,13 @@ directory = "./apps/web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
+# Custom domain on existing zone 142857.eu.cc
+[[routes]]
+pattern = "igo.142857.eu.cc/*"
+zone_name = "142857.eu.cc"
+
 [vars]
-# auto = Workers AI free first → BYOK third-party → static
 COACH_PROVIDER = "auto"
 COACH_TIMEOUT_MS = "2500"
-# Soft cap: successful CF AI coach calls per UTC day (switch to BYOK before free neuron hard wall)
 COACH_CF_SOFT_MAX_CALLS = "40"
 COACH_CF_MODEL = "@cf/meta/llama-3.1-8b-instruct"

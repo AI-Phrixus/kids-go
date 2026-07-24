@@ -1,19 +1,21 @@
-# 狀態快照（可公開）
+# 狀態快照
 
-> **最後更新**：2026-07-24  
-> **版本**：v0.3.0  
-> **URL**：https://kids-go.phrixusjhon.workers.dev  
-> **Cloudflare**：Workers Free（已確認）  
-> **課綱**：L01–L16（含金角銀邊、門吃、抱吃、征子／劫入門）  
-> **目標完成度**：見 [GOALS.md](./GOALS.md)
+> **版本**：v0.4.0  
+> **更新**：2026-07-24  
 
-## 功能摘要
+## 網址
 
-- 雙軌註冊 · 三語 · 西遊 · 護眼 · 家長摘要 · AI 設定  
-- 教練：CF 免費 → 第三方 → 靜態（軟上限 40/日）  
-- 自由對弈：吃子賽 5／10  
+| | |
+|--|--|
+| **自訂域** | https://igo.142857.eu.cc |
+| workers.dev | https://kids-go.phrixusjhon.workers.dev |
+| GitHub | https://github.com/AI-Phrixus/kids-go |
 
-## 待你授權才做
+## 本版（四輪收官）
 
-- 自訂域名 DNS  
-- 付費美術外包（若需要）  
+1. **域名**：`igo.142857.eu.cc`（zone 142857.eu.cc）  
+2. **美術／音效**：悟空 SVG 吉祥物、過關彈跳、落子／吃子／過關音效（可靜音）  
+3. **課綱**：L17–L20 征子多步、倒撲、對殺入門、畢業關（共 20 課）  
+4. **暑假觀察**：`usage_events` + 家長摘要 30 日統計；隱私頁加長  
+
+Cloudflare：**Workers Free** 已確認。  

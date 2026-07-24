@@ -23,6 +23,10 @@ const LESSON_SKILLS: Record<string, { ja: string; "zh-Hant": string; en: string 
   L14: { ja: "抱え取り", "zh-Hant": "抱吃", en: "Clamp capture" },
   L15: { ja: "シチョウ入門", "zh-Hant": "征子入門", en: "Ladder intro" },
   L16: { ja: "コウ入門", "zh-Hant": "打劫入門", en: "Ko intro" },
+  L17: { ja: "シチョウ多手", "zh-Hant": "征子多步", en: "Ladder multi-step" },
+  L18: { ja: "ウッテガエシ", "zh-Hant": "倒撲", en: "Snapback" },
+  L19: { ja: "セメアイ", "zh-Hant": "對殺入門", en: "Liberty race" },
+  L20: { ja: "入門卒業", "zh-Hant": "啟蒙畢業", en: "Graduation" },
 };
 
 const BADGE_NAMES: Record<string, { ja: string; "zh-Hant": string; en: string }> = {
@@ -42,6 +46,10 @@ const BADGE_NAMES: Record<string, { ja: string; "zh-Hant": string; en: string }>
   clamp: { ja: "抱え", "zh-Hant": "抱吃", en: "Clamp" },
   ladder: { ja: "シチョウ", "zh-Hant": "征子", en: "Ladder" },
   ko_intro: { ja: "コウ", "zh-Hant": "打劫", en: "Ko" },
+  ladder2: { ja: "シチョウⅡ", "zh-Hant": "征子Ⅱ", en: "Ladder II" },
+  snapback: { ja: "反転", "zh-Hant": "倒撲", en: "Snapback" },
+  liberty_race: { ja: "気比べ", "zh-Hant": "氣的對殺", en: "Race" },
+  graduation: { ja: "卒業", "zh-Hant": "西天門畢業", en: "Graduate" },
 };
 
 parent.get("/parent/summary", async (c) => {
