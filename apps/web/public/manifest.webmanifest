@@ -1,11 +1,11 @@
 {
   "name": "Kids Igo · 西遊圍棋",
   "short_name": "Kids Igo",
-  "description": "兒童圍棋啟蒙 · 戰略思維 · 護眼休息",
+  "description": "西遊奇幻圍棋啟蒙 · 戰略思維 · 護眼 · 好友",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4ead6",
-  "theme_color": "#c45c26",
+  "background_color": "#b8dff0",
+  "theme_color": "#8fbf8a",
   "lang": "zh-Hant",
   "icons": [
     {

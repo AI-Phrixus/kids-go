@@ -1,6 +1,6 @@
 {
   "name": "kids-go",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "private": true,
   "description": "Kids Igo — children's Go learning game (Cloudflare Free)",
   "scripts": {
