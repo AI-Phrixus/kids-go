@@ -1,0 +1,15 @@
+name = "kids-go-api"
+main = "workers/api/src/index.ts"
+compatibility_date = "2026-07-01"
+
+# Free plan friendly. Create DB then paste id:
+#   wrangler d1 create kids-go
+[[d1_databases]]
+binding = "DB"
+database_name = "kids-go"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[vars]
+COACH_PROVIDER = "none"
+COACH_TIMEOUT_MS = "2500"
