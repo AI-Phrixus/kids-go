@@ -39,72 +39,86 @@ export interface CoachEnv {
   GOOGLE_MODEL?: string;
 }
 
-/** Merge env secrets + per-user BYOK from settings UI */
-export function buildEffectiveEnv(env: CoachEnv, userCfg?: AiConfig | null): CoachEnv {
+/**
+ * Merge env + user settings for BYOK credentials.
+ * Chain policy (product requirement):
+ *   1) Cloudflare Workers AI free  FIRST
+ *   2) Third-party BYOK
+ *   3) Static phrases
+ * Only preferByok=true or provider=none|workers_ai changes this.
+ */
+export function buildEffectiveEnv(env: CoachEnv, userCfg?: AiConfig | null): {
+  env: CoachEnv;
+  preferByok: boolean;
+  forceNone: boolean;
+  forceWorkersOnly: boolean;
+} {
   const u = userCfg ?? EMPTY_AI_CONFIG;
-  const provider =
-    u.provider && u.provider !== "auto"
-      ? u.provider
-      : env.COACH_PROVIDER || "auto";
+  const preferByok = Boolean(u.preferByok && (u.apiKey || u.baseUrl || env.AI_API_KEY || env.XAI_API_KEY || env.GOOGLE_API_KEY));
+  const forceNone = u.provider === "none" || (env.COACH_PROVIDER || "").toLowerCase() === "none";
+  const forceWorkersOnly =
+    !preferByok && (u.provider === "workers_ai" || (env.COACH_PROVIDER || "").toLowerCase() === "workers_ai");
 
-  return {
+  const merged: CoachEnv = {
     ...env,
-    COACH_PROVIDER: u.preferByok && (u.apiKey || u.baseUrl) ? (u.provider === "auto" ? "openai_compatible" : u.provider) : provider,
+    // Keep chain mode as auto unless forced
+    COACH_PROVIDER: forceNone ? "none" : forceWorkersOnly ? "workers_ai" : "auto",
     AI_BASE_URL: u.baseUrl || env.AI_BASE_URL,
     AI_API_KEY: u.apiKey || env.AI_API_KEY,
     AI_MODEL: u.model || env.AI_MODEL,
-    // if user set xai/google keys via generic fields
     XAI_API_KEY:
-      u.provider === "xai" && u.apiKey ? u.apiKey : env.XAI_API_KEY || (u.baseUrl?.includes("x.ai") ? u.apiKey : undefined),
+      u.provider === "xai" && u.apiKey
+        ? u.apiKey
+        : env.XAI_API_KEY || (u.baseUrl?.includes("x.ai") ? u.apiKey || undefined : undefined),
     GOOGLE_API_KEY: u.provider === "google" && u.apiKey ? u.apiKey : env.GOOGLE_API_KEY,
     GOOGLE_MODEL: u.provider === "google" && u.model ? u.model : env.GOOGLE_MODEL,
   };
+
+  // Remember user's BYOK kind on the side via model/url (resolveByok inspects urls/keys)
+  return { env: merged, preferByok, forceNone, forceWorkersOnly };
 }
 
-function resolveByok(env: CoachEnv): CoachProvider | null {
-  const id = (env.COACH_PROVIDER ?? "auto").toLowerCase();
+/** Build third-party provider from credentials (used AFTER CF free, or if preferByok). */
+function resolveByok(env: CoachEnv, userCfg?: AiConfig | null): CoachProvider | null {
+  const u = userCfg ?? EMPTY_AI_CONFIG;
+  const kind = (u.provider || "auto").toLowerCase();
 
-  // Explicit or auto with full openai-compatible triple
-  if (env.AI_BASE_URL && env.AI_API_KEY && env.AI_MODEL) {
-    if (
-      id === "auto" ||
-      id === "openai_compatible" ||
-      id === "xai" ||
-      (id !== "google" && id !== "workers_ai" && id !== "none")
-    ) {
-      // Prefer specialized xai host
-      if (env.AI_BASE_URL.includes("x.ai") || id === "xai") {
-        return createXaiProvider(env.AI_API_KEY || env.XAI_API_KEY || "", env.AI_MODEL || "grok-4.5");
+  // Google
+  if (kind === "google" || env.GOOGLE_API_KEY) {
+    const key = kind === "google" ? env.GOOGLE_API_KEY || env.AI_API_KEY : env.GOOGLE_API_KEY;
+    if (key && (kind === "google" || !env.AI_BASE_URL)) {
+      if (kind === "google" || (!env.AI_BASE_URL && env.GOOGLE_API_KEY)) {
+        return createGoogleProvider({
+          apiKey: key,
+          model: env.GOOGLE_MODEL || env.AI_MODEL || "gemini-2.0-flash",
+        });
       }
-      return createOpenAICompatibleProvider({
-        baseUrl: env.AI_BASE_URL,
-        apiKey: env.AI_API_KEY,
-        model: env.AI_MODEL,
-      });
     }
   }
 
-  if (id === "xai" || (id === "auto" && env.XAI_API_KEY)) {
+  // xAI shortcut
+  if (
+    kind === "xai" ||
+    env.XAI_API_KEY ||
+    (env.AI_BASE_URL && env.AI_BASE_URL.includes("x.ai") && env.AI_API_KEY)
+  ) {
     const key = env.XAI_API_KEY || env.AI_API_KEY;
     if (key) return createXaiProvider(key, env.AI_MODEL || "grok-4.5");
   }
 
-  if (id === "google" || (id === "auto" && env.GOOGLE_API_KEY)) {
-    const key = env.GOOGLE_API_KEY || env.AI_API_KEY;
-    if (key) {
-      return createGoogleProvider({
-        apiKey: key,
-        model: env.GOOGLE_MODEL || env.AI_MODEL || "gemini-2.0-flash",
-      });
-    }
-  }
-
-  // openai_compatible with key+url even if model missing — default model
+  // OpenAI-compatible (includes most presets)
   if (env.AI_BASE_URL && env.AI_API_KEY) {
     return createOpenAICompatibleProvider({
       baseUrl: env.AI_BASE_URL,
       apiKey: env.AI_API_KEY,
       model: env.AI_MODEL || "gpt-4o-mini",
+    });
+  }
+
+  if (kind === "google" && env.GOOGLE_API_KEY) {
+    return createGoogleProvider({
+      apiKey: env.GOOGLE_API_KEY,
+      model: env.GOOGLE_MODEL || env.AI_MODEL || "gemini-2.0-flash",
     });
   }
 
@@ -153,11 +167,13 @@ async function completeWithTimeout(
 export type CoachStatus = {
   dayUtc: string;
   mode: string;
+  chain: string;
   cfSoftMaxCalls: number;
   cfSuccessToday: number;
   cfQuotaHitsToday: number;
   byokConfigured: boolean;
   workersAiBound: boolean;
+  preferByok: boolean;
   alert: string | null;
   reminder: string;
   billingNote: string;
@@ -168,10 +184,12 @@ export async function getCoachStatus(
   locale = "zh-Hant",
   userCfg?: AiConfig | null,
 ): Promise<CoachStatus> {
-  const effective = buildEffectiveEnv(env, userCfg);
+  const { env: effective, preferByok, forceNone, forceWorkersOnly } = buildEffectiveEnv(
+    env,
+    userCfg,
+  );
   const day = utcDay();
   const maxCalls = softMaxCalls(effective);
-  const mode = (effective.COACH_PROVIDER ?? "auto").toLowerCase();
   let q = {
     day,
     cf_success: 0,
@@ -188,37 +206,51 @@ export async function getCoachStatus(
       /* ignore */
     }
   }
-  const byok = resolveByok(effective);
+  const byok = resolveByok(effective, userCfg);
+  const chain = forceNone
+    ? "static"
+    : preferByok
+      ? "byok → static"
+      : forceWorkersOnly
+        ? "cloudflare_free → static"
+        : "cloudflare_free → byok → static";
+
   return {
     dayUtc: day,
-    mode,
+    mode: effective.COACH_PROVIDER || "auto",
+    chain,
     cfSoftMaxCalls: maxCalls,
     cfSuccessToday: q.cf_success,
     cfQuotaHitsToday: q.cf_fail_quota,
     byokConfigured: !!byok,
     workersAiBound: !!env.AI,
+    preferByok,
     alert: q.last_alert,
     reminder: quotaStatusMessage(q, maxCalls, locale),
     billingNote:
-      "Stay on Workers Free for hard stop. Soft cap then BYOK (settings URL/key) then static.",
+      "CF-first free AI. Soft cap switches to BYOK before free Neurons hard wall. Stay on Workers Free to avoid paid overage.",
   };
 }
 
 /**
- * Chain:
- * 1) CF Workers AI (unless preferByok / mode skips)
- * 2) User settings BYOK + env secrets
- * 3) Static
+ * Product chain (mandatory default):
+ * 1) Cloudflare Workers AI free
+ * 2) Third-party BYOK (user settings URL/key)
+ * 3) Static i18n phrases
+ *
+ * Anti-overage: soft max calls/day + treat CF quota errors as hard block for the UTC day.
+ * Account must stay on Workers Free for platform hard-stop (no CF AI overage bill).
  */
 export async function runCoach(
   req: CoachRequest,
   env: CoachEnv,
   userCfg?: AiConfig | null,
-): Promise<CoachResponse & { reminder?: string }> {
-  const effective = buildEffectiveEnv(env, userCfg);
+): Promise<CoachResponse & { reminder?: string; chain?: string }> {
+  const { env: effective, preferByok, forceNone, forceWorkersOnly } = buildEffectiveEnv(
+    env,
+    userCfg,
+  );
   const fallback = staticCoach(req);
-  const mode = (effective.COACH_PROVIDER ?? "auto").toLowerCase();
-  const preferByok = Boolean(userCfg?.preferByok && (userCfg.apiKey || userCfg.baseUrl));
   const timeoutMs = Number(effective.COACH_TIMEOUT_MS ?? 2500);
   const maxTokens = Number(effective.COACH_MAX_TOKENS ?? 120);
   const temperature = Number(effective.COACH_TEMPERATURE ?? 0.5);
@@ -230,16 +262,24 @@ export async function runCoach(
     { role: "user" as const, content: buildUserPrompt(req) },
   ];
 
-  if (mode === "none") {
+  const chainLabel = forceNone
+    ? "static"
+    : preferByok
+      ? "byok→static"
+      : forceWorkersOnly
+        ? "cf→static"
+        : "cf→byok→static";
+
+  if (forceNone) {
     if (env.DB) await bumpQuota(env.DB, day, "static_fallback");
-    return { ...fallback, reminder: "static only" };
+    return { ...fallback, reminder: "static only", chain: chainLabel };
   }
 
   let quota = env.DB ? await getQuota(env.DB, day).catch(() => null) : null;
 
+  // --- 1) Cloudflare free AI FIRST (unless preferByok) ---
   const tryCf =
     !preferByok &&
-    (mode === "auto" || mode === "workers_ai") &&
     !!env.AI &&
     (!quota || !shouldSkipWorkersAi(quota, maxCalls));
 
@@ -257,7 +297,7 @@ export async function runCoach(
       if (rem && quota && quota.cf_success + 1 >= maxCalls - 5 && env.DB) {
         await setAlert(env.DB, day, rem);
       }
-      return { ...parsed, reminder: rem };
+      return { ...parsed, reminder: rem, chain: chainLabel };
     } catch (e) {
       if (isWorkersAiQuotaError(e) && env.DB) {
         await bumpQuota(env.DB, day, "cf_fail_quota");
@@ -279,20 +319,23 @@ export async function runCoach(
           ),
         );
       }
+      // fall through to BYOK
     }
-  } else if (quota && shouldSkipWorkersAi(quota, maxCalls) && env.DB) {
+  } else if (!preferByok && quota && shouldSkipWorkersAi(quota, maxCalls) && env.DB) {
     await bumpQuota(env.DB, day, "cf_blocked_soft");
   }
 
-  if (mode === "workers_ai" && !preferByok) {
+  if (forceWorkersOnly) {
     if (env.DB) await bumpQuota(env.DB, day, "static_fallback");
     return {
       ...fallback,
-      reminder: quota ? quotaStatusMessage(quota, maxCalls, req.locale) : "workers_ai → static",
+      reminder: quota ? quotaStatusMessage(quota, maxCalls, req.locale) : "cf only → static",
+      chain: chainLabel,
     };
   }
 
-  const byok = resolveByok(effective);
+  // --- 2) Third-party BYOK ---
+  const byok = resolveByok(effective, userCfg);
   if (byok) {
     try {
       const text = await completeWithTimeout(byok, messages, maxTokens, temperature, timeoutMs);
@@ -303,15 +346,17 @@ export async function runCoach(
             .then((q) => quotaStatusMessage(q, maxCalls, req.locale))
             .catch(() => undefined)
         : undefined;
-      return { ...parsed, reminder: rem };
+      return { ...parsed, reminder: rem, chain: chainLabel };
     } catch {
       /* static */
     }
   }
 
+  // --- 3) Static ---
   if (env.DB) await bumpQuota(env.DB, day, "static_fallback");
   return {
     ...fallback,
     reminder: quota ? quotaStatusMessage(quota, maxCalls, req.locale) : "static fallback",
+    chain: chainLabel,
   };
 }

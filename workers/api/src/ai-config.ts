@@ -1,12 +1,16 @@
 /** Per-user BYOK coach settings stored on users.ai_config_json */
 
 export type AiConfig = {
-  /** auto | workers_ai | openai_compatible | xai | google | none */
+  /**
+   * byokKind: how to call third-party when CF free is exhausted / skipped
+   * - auto | openai_compatible | xai | google
+   * Chain mode is ALWAYS CF-first unless preferByok or forceNone.
+   */
   provider: string;
   baseUrl: string;
   apiKey: string;
   model: string;
-  /** If true, skip CF Workers AI and go straight to this BYOK */
+  /** If true, skip CF Workers AI and go straight to third-party */
   preferByok: boolean;
 };
 
@@ -44,10 +48,17 @@ export function publicAiConfig(cfg: AiConfig) {
     preferByok: cfg.preferByok,
     hasApiKey: key.length > 0,
     apiKeyHint: key.length > 4 ? `••••${key.slice(-4)}` : key ? "••••" : "",
+    /** UI copy: chain is always CF-first unless preferByok */
+    chain: cfg.preferByok
+      ? "byok → static"
+      : "cloudflare_free → byok → static",
   };
 }
 
-export function mergeAiConfig(prev: AiConfig, patch: Partial<AiConfig> & { clearApiKey?: boolean }): AiConfig {
+export function mergeAiConfig(
+  prev: AiConfig,
+  patch: Partial<AiConfig> & { clearApiKey?: boolean },
+): AiConfig {
   const next: AiConfig = {
     provider: patch.provider !== undefined ? String(patch.provider) : prev.provider,
     baseUrl: patch.baseUrl !== undefined ? String(patch.baseUrl).trim() : prev.baseUrl,
@@ -59,14 +70,12 @@ export function mergeAiConfig(prev: AiConfig, patch: Partial<AiConfig> & { clear
   else if (patch.apiKey !== undefined && String(patch.apiKey).trim() !== "") {
     next.apiKey = String(patch.apiKey).trim();
   }
-  // normalize provider
   const p = next.provider.toLowerCase();
   if (!["auto", "workers_ai", "openai_compatible", "xai", "google", "none"].includes(p)) {
     next.provider = "auto";
   } else {
     next.provider = p;
   }
-  // strip trailing slash on URL
   if (next.baseUrl.endsWith("/")) next.baseUrl = next.baseUrl.replace(/\/+$/, "");
   return next;
 }

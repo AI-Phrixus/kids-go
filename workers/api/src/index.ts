@@ -9,7 +9,7 @@ import settings from "./routes/settings";
 import { loadSession } from "./session";
 import type { Env } from "./types";
 
-const VERSION = "0.1.2";
+const VERSION = "0.1.3";
 
 const app = new Hono<{ Bindings: Env }>();
 

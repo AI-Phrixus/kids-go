@@ -628,13 +628,14 @@ async function renderSettings() {
       </label>
       <label>${t(locale, "provider")}
         <select id="provider">
-          <option value="auto" ${c.provider === "auto" ? "selected" : ""}>auto (CF free → BYOK → static)</option>
-          <option value="workers_ai" ${c.provider === "workers_ai" ? "selected" : ""}>workers_ai only</option>
-          <option value="openai_compatible" ${c.provider === "openai_compatible" ? "selected" : ""}>openai_compatible</option>
-          <option value="xai" ${c.provider === "xai" ? "selected" : ""}>xai</option>
-          <option value="google" ${c.provider === "google" ? "selected" : ""}>google</option>
-          <option value="none" ${c.provider === "none" ? "selected" : ""}>none (static)</option>
+          <option value="auto" ${c.provider === "auto" ? "selected" : ""}>auto（BYOK 種類自動）</option>
+          <option value="openai_compatible" ${c.provider === "openai_compatible" ? "selected" : ""}>openai_compatible（第三方種類）</option>
+          <option value="xai" ${c.provider === "xai" ? "selected" : ""}>xai（第三方種類）</option>
+          <option value="google" ${c.provider === "google" ? "selected" : ""}>google（第三方種類）</option>
+          <option value="workers_ai" ${c.provider === "workers_ai" ? "selected" : ""}>僅 CF（無第三方）</option>
+          <option value="none" ${c.provider === "none" ? "selected" : ""}>僅本地句庫</option>
         </select>
+        <p class="muted">預設永遠：CF 免費 → 第三方 → 本地。選 openai/xai/google 只表示「第三方怎麼連」，不會跳過 CF。</p>
       </label>
       <label>${t(locale, "base_url")}
         <input id="baseUrl" type="url" placeholder="https://api.x.ai/v1" value="${escapeHtml(c.baseUrl)}" />

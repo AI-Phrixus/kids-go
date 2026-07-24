@@ -28,6 +28,12 @@
 https://github.com/AI-Phrixus/kids-go
 ```
 
+教練防超額 / 下一任 AI：
+
+```text
+docs/AI-TO-AI-QUOTA.md
+```
+
 生產 URL：
 
 ```text

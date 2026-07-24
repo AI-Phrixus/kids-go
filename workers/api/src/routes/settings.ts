@@ -17,35 +17,35 @@ settings.get("/ai", async (c) => {
     presets: [
       {
         id: "xai",
-        label: "xAI Grok",
+        label: "xAI Grok（備援；仍先 CF 免費）",
         baseUrl: "https://api.x.ai/v1",
         model: "grok-4.5",
         provider: "openai_compatible",
       },
       {
         id: "groq",
-        label: "Groq (OpenAI-compatible)",
+        label: "Groq（備援；仍先 CF 免費）",
         baseUrl: "https://api.groq.com/openai/v1",
         model: "llama-3.1-8b-instant",
         provider: "openai_compatible",
       },
       {
         id: "openai",
-        label: "OpenAI",
+        label: "OpenAI（備援；仍先 CF 免費）",
         baseUrl: "https://api.openai.com/v1",
         model: "gpt-4o-mini",
         provider: "openai_compatible",
       },
       {
         id: "google",
-        label: "Google Gemini (use GOOGLE key field / provider=google)",
+        label: "Google Gemini（備援；仍先 CF 免費）",
         baseUrl: "",
         model: "gemini-2.0-flash",
         provider: "google",
       },
       {
         id: "custom",
-        label: "Custom OpenAI-compatible URL",
+        label: "自訂 OpenAI 相容 URL（備援）",
         baseUrl: "",
         model: "",
         provider: "openai_compatible",
@@ -53,9 +53,9 @@ settings.get("/ai", async (c) => {
     ],
     hints: {
       zhHant:
-        "填寫 Base URL（如 https://api.x.ai/v1）、API Key、Model。auto 模式：先用 Cloudflare 免費 AI，額度到了再用這裡的第三方。",
-      en: "Fill Base URL, API Key, Model. In auto mode CF free AI is tried first, then this BYOK.",
-      ja: "Base URL・API Key・Model を入力。auto では先に CF 無料AI、その後この第三者API。",
+        "【優先順序固定】① Cloudflare 免費 AI → ② 下方第三方 URL/Key → ③ 本地句庫。填寫第三方不會跳過 CF，除非勾選「略過 CF」。軟上限防止超額。",
+      en: "Order is fixed: 1) CF free AI 2) third-party URL/key 3) static. Filling BYOK does NOT skip CF unless you check prefer BYOK. Soft cap prevents overage.",
+      ja: "順序固定：①CF無料 → ②第三者 → ③定型文。第三者を記入しても CF を飛ばしません（優先BYOKにチェックした場合を除く）。",
     },
   });
 });

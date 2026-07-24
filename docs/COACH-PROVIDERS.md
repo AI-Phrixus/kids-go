@@ -1,12 +1,15 @@
 # 可插拔教練 · Cloudflare 免費優先 · 防超額
 
-## 預設鏈（`COACH_PROVIDER=auto`）
+## 預設鏈（硬性 · 不可顛倒）
 
 ```text
-1) Cloudflare Workers AI（免費額度）
-2) 你填的第三方 BYOK（額度/軟上限到了自動切）
+1) Cloudflare Workers AI（免費額度）     ← 永遠優先
+2) 你填的第三方 BYOK（軟上限/額度到了才切）
 3) 本地靜態句庫（永遠可玩、零費用）
 ```
+
+填寫 Base URL / Key **不會**跳過第 1 步。  
+只有勾選「略過 CF / preferByok」才會先打第三方。
 
 ## 如何避免扣款
 
