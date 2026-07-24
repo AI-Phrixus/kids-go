@@ -1,7 +1,9 @@
 import {
+  captureRaceWinner,
   createEmptyBoard,
   groupLiberties,
   idx,
+  pass,
   pickAiMove,
   tryPlay,
   type BoardState,
@@ -13,6 +15,7 @@ import { EyeCareClock } from "./eyecare";
 import { fallbackName, pickLocaleText, t, type Locale } from "./i18n";
 
 type Route = "welcome" | "map" | "lesson" | "free" | "settings" | "parent" | "privacy";
+type FreeMode = "casual" | "race5" | "race10";
 
 let locale: Locale = (localStorage.getItem("kids-go-locale") as Locale) || "zh-Hant";
 let route: Route = "welcome";
@@ -28,6 +31,8 @@ let authTab: "quick" | "parent" | "login" = "quick";
 let completing = false;
 let coachBanner = "";
 let lastMove: { x: number; y: number } | null = null;
+let freeMode: FreeMode = "casual";
+let lessonTotal = 16;
 
 const clock = new EyeCareClock({ breakEveryMin: 20, breakSec: 20 });
 clock.onBreak = () => showBreak(true);
@@ -94,7 +99,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.2.1 · <span id="mins">0</span> min · Cloudflare Free
+      v0.3.0 · <span id="mins">0</span> min · Cloudflare Free
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
     </p>
   `;
@@ -106,6 +111,7 @@ function shell(body: string) {
   document.querySelector("#locale")?.addEventListener("change", (e) => {
     locale = (e.target as HTMLSelectElement).value as Locale;
     saveLocale();
+    void api.saveLocale?.(locale).catch(() => undefined);
     render();
   });
 }
@@ -227,8 +233,9 @@ async function renderMap() {
   try {
     const data = await api.lessons();
     nickname = data.child.nickname;
+    lessonTotal = data.lessons.length;
     doneCount = data.lessons.filter((l) => l.status === "completed").length;
-    progressPct = Math.round((doneCount / Math.max(1, data.lessons.length)) * 100);
+    progressPct = Math.round((doneCount / Math.max(1, lessonTotal)) * 100);
     lessonsHtml = data.lessons
       .map((l, i) => {
         const title = l.titles[locale] || l.titles.en || l.id;
@@ -269,7 +276,7 @@ async function renderMap() {
         </div>
       </div>
       <div class="progress-wrap">
-        <div class="progress-label">${t(locale, "progress")}: ${doneCount}/12 · ${progressPct}%</div>
+        <div class="progress-label">${t(locale, "progress")}: ${doneCount}/${lessonTotal} · ${progressPct}%</div>
         <div class="progress-bar"><div class="progress-fill" style="width:${progressPct}%"></div></div>
       </div>
       <div class="map path">${lessonsHtml}</div>
@@ -295,6 +302,7 @@ async function renderMap() {
     board = createEmptyBoard(9);
     humanMoves = 0;
     lastMove = null;
+    freeMode = "casual";
     statusMsg = "";
     route = "free";
     render();
@@ -418,12 +426,32 @@ function renderLesson() {
 }
 
 function renderFree() {
+  const raceLabel =
+    freeMode === "race5"
+      ? locale === "zh-Hant"
+        ? "吃子賽 · 先吃 5 子"
+        : "Capture race · first to 5"
+      : freeMode === "race10"
+        ? locale === "zh-Hant"
+          ? "吃子賽 · 先吃 10 子"
+          : "Capture race · first to 10"
+        : locale === "zh-Hant"
+          ? "隨意對弈"
+          : "Casual";
   shell(`
     <div class="card">
       <div class="row between">
         <h2>${t(locale, "free")}</h2>
         <button id="home">${t(locale, "home")}</button>
       </div>
+      <div class="row">
+        <button id="mode-casual" class="${freeMode === "casual" ? "primary" : ""}">${locale === "zh-Hant" ? "隨意" : "Casual"}</button>
+        <button id="mode-r5" class="${freeMode === "race5" ? "primary" : ""}">${locale === "zh-Hant" ? "先吃5" : "Race5"}</button>
+        <button id="mode-r10" class="${freeMode === "race10" ? "primary" : ""}">${locale === "zh-Hant" ? "先吃10" : "Race10"}</button>
+        <button id="pass">${locale === "zh-Hant" ? "停一手" : "Pass"}</button>
+        <button id="reset">${locale === "zh-Hant" ? "重來" : "Reset"}</button>
+      </div>
+      <p class="muted">${escapeHtml(raceLabel)} · B${board.captured.black} / W${board.captured.white}</p>
       ${boardHtml(board, true)}
       <p class="bubble">${escapeHtml(statusMsg || `${name()} vs AI`)}</p>
       <button id="ask">${t(locale, "ask")}</button>
@@ -434,6 +462,46 @@ function renderFree() {
     void renderMap();
   });
   document.querySelector("#ask")?.addEventListener("click", () => void askCoach());
+  document.querySelector("#mode-casual")?.addEventListener("click", () => {
+    freeMode = "casual";
+    board = createEmptyBoard(9);
+    lastMove = null;
+    statusMsg = "";
+    render();
+  });
+  document.querySelector("#mode-r5")?.addEventListener("click", () => {
+    freeMode = "race5";
+    board = createEmptyBoard(9);
+    lastMove = null;
+    statusMsg = locale === "zh-Hant" ? "先吃滿 5 子獲勝！" : "First to 5 captures wins!";
+    render();
+  });
+  document.querySelector("#mode-r10")?.addEventListener("click", () => {
+    freeMode = "race10";
+    board = createEmptyBoard(9);
+    lastMove = null;
+    statusMsg = locale === "zh-Hant" ? "先吃滿 10 子獲勝！" : "First to 10 captures wins!";
+    render();
+  });
+  document.querySelector("#pass")?.addEventListener("click", () => {
+    board = pass(board);
+    const mv = pickAiMove(board, 1);
+    if (mv) {
+      const after = tryPlay(board, mv.x, mv.y);
+      if (after) {
+        board = after;
+        lastMove = { x: mv.x, y: mv.y };
+      }
+    }
+    statusMsg = locale === "zh-Hant" ? "你停了一手，AI 繼續下。" : "You passed; AI moved.";
+    render();
+  });
+  document.querySelector("#reset")?.addEventListener("click", () => {
+    board = createEmptyBoard(9);
+    lastMove = null;
+    statusMsg = "";
+    render();
+  });
   bindBoardClicks();
 }
 
@@ -516,7 +584,15 @@ function onTap(x: number, y: number) {
     if (!next) return;
     board = next;
     lastMove = { x, y };
-    const mv = pickAiMove(board, 0);
+    const target = freeMode === "race5" ? 5 : freeMode === "race10" ? 10 : 0;
+    let win = target ? captureRaceWinner(board.captured, target) : null;
+    if (win === "black") {
+      statusMsg =
+        locale === "zh-Hant" ? `${name()} 獲勝！先吃滿 ${target} 子！` : `${name()} wins! First to ${target}!`;
+      render();
+      return;
+    }
+    const mv = pickAiMove(board, 1);
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
       if (after) {
@@ -524,7 +600,16 @@ function onTap(x: number, y: number) {
         lastMove = { x: mv.x, y: mv.y };
       }
     }
-    statusMsg = `${name()} · capt B${board.captured.black}/W${board.captured.white}`;
+    win = target ? captureRaceWinner(board.captured, target) : null;
+    if (win === "white") {
+      statusMsg =
+        locale === "zh-Hant" ? `AI 先吃滿 ${target} 子。再試一次！` : `AI reached ${target}. Try again!`;
+    } else if (win === "black") {
+      statusMsg =
+        locale === "zh-Hant" ? `${name()} 獲勝！` : `${name()} wins!`;
+    } else {
+      statusMsg = `${name()} · B${board.captured.black}/W${board.captured.white}${target ? ` (目標${target})` : ""}`;
+    }
     render();
   }
 }

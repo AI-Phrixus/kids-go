@@ -19,6 +19,10 @@ const LESSON_SKILLS: Record<string, { ja: string; "zh-Hant": string; en: string 
   L10: { ja: "金角銀辺草中腹", "zh-Hant": "金角銀邊草肚皮", en: "Corner / side / center" },
   L11: { ja: "辺の感覚", "zh-Hant": "銀邊練習", en: "Side sense" },
   L12: { ja: "取り総合", "zh-Hant": "吃子綜合練習", en: "Capture review" },
+  L13: { ja: "門食べ", "zh-Hant": "門吃", en: "Net / gate capture" },
+  L14: { ja: "抱え取り", "zh-Hant": "抱吃", en: "Clamp capture" },
+  L15: { ja: "シチョウ入門", "zh-Hant": "征子入門", en: "Ladder intro" },
+  L16: { ja: "コウ入門", "zh-Hant": "打劫入門", en: "Ko intro" },
 };
 
 const BADGE_NAMES: Record<string, { ja: string; "zh-Hant": string; en: string }> = {
@@ -34,6 +38,10 @@ const BADGE_NAMES: Record<string, { ja: string; "zh-Hant": string; en: string }>
   corner: { ja: "金角", "zh-Hant": "金角銀邊", en: "Golden corner" },
   side_camp: { ja: "銀辺", "zh-Hant": "銀邊官道", en: "Silver side" },
   gate: { ja: "山門", "zh-Hant": "小山門", en: "Gate trial" },
+  net_capture: { ja: "門食べ", "zh-Hant": "門吃", en: "Net" },
+  clamp: { ja: "抱え", "zh-Hant": "抱吃", en: "Clamp" },
+  ladder: { ja: "シチョウ", "zh-Hant": "征子", en: "Ladder" },
+  ko_intro: { ja: "コウ", "zh-Hant": "打劫", en: "Ko" },
 };
 
 parent.get("/parent/summary", async (c) => {

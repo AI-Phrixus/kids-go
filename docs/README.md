@@ -10,7 +10,8 @@
 | [CHARACTER-CARE.md](./CHARACTER-CARE.md) | 角色、暱稱、幻想倫理 |
 | [STORY-XIYOU.md](./STORY-XIYOU.md) | 《西遊記》敘事憲法 |
 | [PRODUCT.md](./PRODUCT.md) | 產品願景 |
-| [CURRICULUM.md](./CURRICULUM.md) | 課綱 |
+| [CURRICULUM.md](./CURRICULUM.md) | 課綱 L01–L16 |
+| [GOALS.md](./GOALS.md) | 原始目標完成度 |
 | [I18N.md](./I18N.md) | 三語 |
 | [COACH-PROVIDERS.md](./COACH-PROVIDERS.md) | 教練多供應商 |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 想改程式 |

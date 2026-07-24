@@ -126,6 +126,11 @@ export const api = {
     }>(`/api/parent/summary?locale=${encodeURIComponent(locale)}`),
   badges: () =>
     req<{ badges: { badge_id: string; earned_at: number }[] }>("/api/badges"),
+  saveLocale: (locale: string) =>
+    req("/api/auth/locale", {
+      method: "PATCH",
+      body: JSON.stringify({ locale }),
+    }),
 };
 
 export type LessonDetail = {

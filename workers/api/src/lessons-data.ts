@@ -557,8 +557,175 @@ export const LESSONS: LessonMeta[] = [
       tap("先吃掉第一處叫吃白：點 (2,3)。", "まず(2,3)で1つ目。", "First capture point (2,3).", [[2, 3]]),
     ],
   },
+  {
+    id: "L13",
+    boardSize: 9,
+    order: 13,
+    badgeId: "net_capture",
+    skillTag: T.title("門吃（關門吃）", "門食べ", "Net / gate capture"),
+    titles: T.title("盤絲陣 · 門吃", "門食べ", "Gate capture (net)"),
+    story: T.story(
+      "{{name}}，門吃：像關城門——把對方趕進「口袋」，再把門關上！",
+      "{{name}}、門食べ＝袋小路に追い込んで取る！",
+      "{{name}}, gate capture: drive them into a pocket, then shut the gate!",
+    ),
+    goal: T.story("完成吃子：點關門的一手，再吃掉白子", "門を閉めて取る", "Shut the gate and capture"),
+    battle: {
+      mode: "capture_n",
+      n: 1,
+      aiLevel: 0,
+      setup: [
+        // white in a "corridor" — classic simplified net
+        { x: 4, y: 2, color: "white" },
+        { x: 3, y: 2, color: "black" },
+        { x: 5, y: 2, color: "black" },
+        { x: 3, y: 3, color: "black" },
+        { x: 5, y: 3, color: "black" },
+        { x: 3, y: 1, color: "black" },
+        { x: 5, y: 1, color: "black" },
+        // white liberty path toward 4,3 and 4,1 — black to play 4,3 or capture setup
+        { x: 4, y: 0, color: "black" },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "門吃（關門吃）：不讓對方逃出去，把逃路堵成「死胡同」再吃。",
+        "逃げ道をふさいでから取る。",
+        "Net capture: block escape routes, then capture.",
+      ),
+      info(
+        "和雙叫吃不同：門吃常靠「圍＋關門」多步完成。",
+        "両アタリとは違い、囲ってから閉じる。",
+        "Unlike double atari, nets often need several surrounding moves.",
+      ),
+      tap("點 (4,3)，封住白子往下的路（關門）！", "(4,3)で門を閉じよう！", "Tap (4,3) to shut the gate!", [[4, 3]]),
+    ],
+  },
+  {
+    id: "L14",
+    boardSize: 9,
+    order: 14,
+    badgeId: "clamp",
+    skillTag: T.title("抱吃", "抱え込み", "Clamp / hug capture"),
+    titles: T.title("緊箍 · 抱吃", "抱え取り", "Clamp capture"),
+    story: T.story(
+      "{{name}}，抱吃：從兩邊「抱住」對方，讓他無處可逃。",
+      "{{name}}、両側から抱えて取る！",
+      "{{name}}, clamp: hug from both sides so they cannot run!",
+    ),
+    goal: T.story("吃掉被抱住的白子", "抱えた白を取る", "Capture the clamped white stone"),
+    battle: {
+      mode: "capture_n",
+      n: 1,
+      aiLevel: 0,
+      setup: [
+        { x: 4, y: 4, color: "white" },
+        { x: 3, y: 4, color: "black" },
+        { x: 5, y: 4, color: "black" },
+        { x: 4, y: 3, color: "black" },
+        // capture at 4,5
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "抱吃：左右（或上下）已經有己方子，再補最後一氣。",
+        "両側を押さえて最後の気。",
+        "Clamp: you already press both sides; fill the last liberty.",
+      ),
+      tap("點 (4,5) 完成抱吃！", "(4,5)で抱え取り！", "Tap (4,5) to finish the clamp!", [[4, 5]]),
+    ],
+  },
+  {
+    id: "L15",
+    boardSize: 9,
+    order: 15,
+    badgeId: "ladder",
+    skillTag: T.title("征子入門", "シチョウ入門", "Ladder intro"),
+    titles: T.title("筋斗雲 · 征子入門", "シチョウ入門", "Ladder intro"),
+    story: T.story(
+      "{{name}}，征子（梯子）：一直叫吃、對方一直逃，像追著筋斗雲——方向對就能吃到！",
+      "{{name}}、シチョウ＝追いかけて取る形！",
+      "{{name}}, ladder: keep giving atari as they run — chase correctly to capture!",
+    ),
+    goal: T.story("跟著征子方向追一程並完成吃子", "シチョウで取る", "Chase the ladder and capture"),
+    battle: {
+      mode: "capture_n",
+      n: 1,
+      aiLevel: 0,
+      // Simplified ladder start: white will be chased; kids get a near-finished ladder capture
+      setup: [
+        { x: 2, y: 2, color: "white" },
+        { x: 1, y: 2, color: "black" },
+        { x: 2, y: 1, color: "black" },
+        { x: 3, y: 1, color: "black" },
+        { x: 1, y: 3, color: "black" },
+        // white liberties limited; black to play 3,2 or 2,3 style chase
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "征子：你叫吃 → 對方逃 → 你再叫吃，沿著對角線追。",
+        "アタリ→逃げ→またアタリ、斜めに追う。",
+        "Ladder: atari → escape → atari again, chasing diagonally.",
+      ),
+      info(
+        "啟蒙重點：方向追對就吃得到；有對方「引征」子會失敗（進階再說）。",
+        "方向が大事。引きシチョウは後で。",
+        "Chase direction matters; ladder-breakers come later.",
+      ),
+      tap("點 (3,2) 繼續追（簡化征子一手）！", "(3,2)で追おう！", "Tap (3,2) to continue the chase!", [[3, 2]]),
+    ],
+  },
+  {
+    id: "L16",
+    boardSize: 9,
+    order: 16,
+    badgeId: "ko_intro",
+    skillTag: T.title("打劫入門", "コウ入門", "Ko intro"),
+    titles: T.title("緊箍咒 · 打劫入門", "コウ入門", "Ko intro"),
+    story: T.story(
+      "{{name}}，打劫：同一個來回收就會沒完沒了——所以規則說：不能立刻提回，要先「找劫材」！",
+      "{{name}}、コウ＝すぐ取り返すのは禁止！",
+      "{{name}}, ko: no instant recapture — play elsewhere first (ko threat)!",
+    ),
+    goal: T.story("認識劫：完成一盤吃子練習並記住「不能立刻提回」", "コウを知って取り練習", "Learn ko rule, then capture practice"),
+    battle: {
+      mode: "capture_n",
+      n: 1,
+      aiLevel: 0,
+      setup: [
+        { x: 5, y: 5, color: "white" },
+        { x: 4, y: 5, color: "black" },
+        { x: 6, y: 5, color: "black" },
+        { x: 5, y: 4, color: "black" },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "若允許同點來回提，棋會無限循環。所以：剛被提的那點，下一手不能立刻提回。",
+        "同じ点の取り合い禁止＝コウ。",
+        "Immediate recapture on the same point is forbidden — that is ko.",
+      ),
+      info(
+        "兒童先記住口訣：「提了劫，先去別處下一手。」",
+        "取ったら一度よそへ。",
+        "Kid mnemonic: after a ko capture, play somewhere else first.",
+      ),
+      info(
+        "本關先用吃子複習；真正的打劫對殺以後再練。",
+        "まずは取りの復習。コウ戦は後で。",
+        "This stage reviews capture; full ko fights come later.",
+      ),
+      tap("點 (5,6) 完成提子練習。", "(5,6)で取ろう。", "Tap (5,6) to capture.", [[5, 6]]),
+    ],
+  },
 ];
 
 export function getLesson(id: string): LessonMeta | undefined {
   return LESSONS.find((l) => l.id === id);
 }
+

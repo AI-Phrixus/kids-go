@@ -11,11 +11,27 @@ import type { Env, Locale } from "../types";
 
 const auth = new Hono<{ Bindings: Env }>();
 
+/** Simple in-memory rate limit (per isolate; best-effort on Free). */
+const hits = new Map<string, { n: number; t: number }>();
+function rateLimit(key: string, max = 20, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const row = hits.get(key);
+  if (!row || now - row.t > windowMs) {
+    hits.set(key, { n: 1, t: now });
+    return true;
+  }
+  if (row.n >= max) return false;
+  row.n += 1;
+  return true;
+}
+
 function okLocale(v: unknown): Locale {
   return v === "ja" || v === "zh-Hant" || v === "en" ? v : "ja";
 }
 
 auth.post("/register/parent", async (c) => {
+  const ip = c.req.header("cf-connecting-ip") || "local";
+  if (!rateLimit(`reg:${ip}`, 10)) return c.json({ error: "rate_limited" }, 429);
   const body = await c.req.json<{
     email?: string;
     password?: string;
@@ -59,6 +75,8 @@ auth.post("/register/parent", async (c) => {
 });
 
 auth.post("/register/quick", async (c) => {
+  const ip = c.req.header("cf-connecting-ip") || "local";
+  if (!rateLimit(`reg:${ip}`, 10)) return c.json({ error: "rate_limited" }, 429);
   const body = await c.req.json<{ nickname?: string; pin?: string; locale?: string }>();
   const nick = (body.nickname ?? "").trim().slice(0, 12);
   const pin = (body.pin ?? "").trim();
@@ -90,6 +108,8 @@ auth.post("/register/quick", async (c) => {
 });
 
 auth.post("/login", async (c) => {
+  const ip = c.req.header("cf-connecting-ip") || "local";
+  if (!rateLimit(`login:${ip}`, 30)) return c.json({ error: "rate_limited" }, 429);
   const body = await c.req.json<{
     mode?: "parent" | "quick";
     email?: string;
@@ -183,6 +203,22 @@ auth.post("/children", async (c) => {
   ]);
   await setSessionChild(c.env, sess.sessionId, childId);
   return c.json({ ok: true, childId });
+});
+
+auth.patch("/locale", async (c) => {
+  const sess = await loadSession(c.env, c.req.header("Cookie"));
+  if (!sess) return c.json({ error: "unauthorized" }, 401);
+  const body = await c.req.json<{ locale?: string }>();
+  const locale = okLocale(body.locale);
+  await c.env.DB.prepare(`UPDATE users SET preferred_locale = ? WHERE id = ?`)
+    .bind(locale, sess.user.id)
+    .run();
+  if (sess.child) {
+    await c.env.DB.prepare(`UPDATE children SET preferred_locale = ? WHERE id = ?`)
+      .bind(locale, sess.child.id)
+      .run();
+  }
+  return c.json({ ok: true, locale });
 });
 
 auth.post("/children/:id/select", async (c) => {
