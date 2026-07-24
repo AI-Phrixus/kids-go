@@ -94,7 +94,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.2.0 · <span id="mins">0</span> min · Cloudflare Free
+      v0.2.1 · <span id="mins">0</span> min · Cloudflare Free
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
     </p>
   `;
@@ -322,26 +322,8 @@ async function renderMap() {
   });
 }
 
+/** Apply lesson battle.setup to board (all lessons) */
 function setupBoard(l: LessonDetail): BoardState {
-  // L02 / L05 atari recognition boards
-  if (l.id === "L02") {
-    const b = createEmptyBoard(9);
-    const g = b.grid.slice();
-    g[idx(9, 2, 2)] = "white";
-    g[idx(9, 1, 2)] = "black";
-    g[idx(9, 3, 2)] = "black";
-    g[idx(9, 2, 1)] = "black";
-    return { ...b, grid: g };
-  }
-  if (l.id === "L05") {
-    const b = createEmptyBoard(9);
-    const g = b.grid.slice();
-    g[idx(9, 4, 4)] = "white";
-    g[idx(9, 3, 4)] = "black";
-    g[idx(9, 5, 4)] = "black";
-    g[idx(9, 4, 3)] = "black";
-    return { ...b, grid: g };
-  }
   let b = createEmptyBoard(9);
   const setup = l.battle.setup;
   if (setup?.length) {
@@ -377,7 +359,7 @@ function renderLesson() {
       mid = `
         <p class="story">${pickLocaleText(locale, step.prompt, name())}</p>
         ${boardHtml(board, true)}
-        <p class="bubble">${statusMsg}</p>`;
+        <p class="bubble">${escapeHtml(statusMsg)}</p>`;
     }
   } else if (phase === "battle") {
     mid = `
@@ -388,20 +370,21 @@ function renderLesson() {
         <button id="ask">${t(locale, "ask")}</button>
         <button id="home">${t(locale, "home")}</button>
       </div>
-      <p class="bubble">${statusMsg}</p>`;
+      <p class="bubble">${escapeHtml(statusMsg)}</p>`;
   } else {
     mid = `
       <h2 class="win">${t(locale, "win")}</h2>
-      <p>${name()} ★★☆ · ${lesson.badgeId}</p>
+      <p>${escapeHtml(name())} ★★☆ · ${escapeHtml(lesson.badgeId)}</p>
       <div class="row">
         <button class="primary" id="home">${t(locale, "home")}</button>
         <button id="again">${t(locale, "again")}</button>
-      </div>`;
+      </div>
+      <p class="bubble">${escapeHtml(statusMsg)}</p>`;
   }
 
   shell(`
     <div class="card">
-      <h2>${lesson.id} · ${title}</h2>
+      <h2>${lesson.id} · ${escapeHtml(title)}</h2>
       ${mid}
     </div>
   `);
@@ -411,6 +394,7 @@ function renderLesson() {
     if (stepIndex >= lesson!.steps.length) {
       phase = "battle";
       board = setupBoard(lesson!);
+      lastMove = null;
       humanMoves = 0;
       statusMsg = pickLocaleText(locale, lesson!.goal, name());
     }
@@ -423,7 +407,9 @@ function renderLesson() {
   document.querySelector("#again")?.addEventListener("click", () => {
     phase = "battle";
     board = setupBoard(lesson!);
+    lastMove = null;
     humanMoves = 0;
+    completing = false;
     statusMsg = "";
     render();
   });
@@ -439,7 +425,7 @@ function renderFree() {
         <button id="home">${t(locale, "home")}</button>
       </div>
       ${boardHtml(board, true)}
-      <p class="bubble">${statusMsg || `${name()} vs AI`}</p>
+      <p class="bubble">${escapeHtml(statusMsg || `${name()} vs AI`)}</p>
       <button id="ask">${t(locale, "ask")}</button>
     </div>
   `);
@@ -460,8 +446,7 @@ function boardHtml(b: BoardState, interactive: boolean): string {
       const x = i % size;
       const y = Math.floor(i / size);
       const stone = c === "black" ? "black" : c === "white" ? "white" : "";
-      const last =
-        lastMove && lastMove.x === x && lastMove.y === y ? " last" : "";
+      const last = lastMove && lastMove.x === x && lastMove.y === y ? " last" : "";
       const hoshi = !c && HOSHI_9.has(`${x},${y}`) ? " hoshi" : "";
       return `<button class="cell ${stone}${last}${hoshi}" data-x="${x}" data-y="${y}" ${interactive ? "" : "disabled"}></button>`;
     })
@@ -491,20 +476,31 @@ function onTap(x: number, y: number) {
             : locale === "ja"
               ? `${name()}、せいかい！`
               : `${name()}, correct!`;
+        // place a mark on board for feedback if empty
+        if (!board.grid[idx(board.size, x, y)]) {
+          const next = tryPlay(board, x, y);
+          if (next) {
+            board = next;
+            lastMove = { x, y };
+          }
+        } else {
+          lastMove = { x, y };
+        }
         stepIndex++;
         if (stepIndex >= lesson.steps.length) {
           phase = "battle";
           board = setupBoard(lesson);
+          lastMove = null;
           humanMoves = 0;
         }
         render();
       } else {
         statusMsg =
           locale === "zh-Hant"
-            ? "再找找看～"
+            ? "再找找看～想想口訣或數一數氣。"
             : locale === "ja"
-              ? "もういちど！"
-              : "Try another point!";
+              ? "もういちど！気を数えよう。"
+              : "Try again — count liberties or recall the proverb!";
         render();
       }
       return;
@@ -540,8 +536,8 @@ function handleBattleMove(x: number, y: number) {
   if (mode === "find_atari") {
     const pts = lesson.battle.points ?? [];
     const hit = pts.some(([px, py]) => px === x && py === y);
-    // also allow empty liberty next to the stone
     if (hit || isAtariTarget(x, y, pts)) {
+      lastMove = { x, y };
       void completeLesson(3);
     } else {
       statusMsg =
@@ -586,7 +582,6 @@ function handleBattleMove(x: number, y: number) {
       void completeLesson(3);
       return;
     }
-    // weak AI: prefer not to fill last liberty of its own dying stones well
     const mv = pickAiMove(board, (lesson.battle.aiLevel as 0 | 1 | 2) ?? 0);
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
@@ -648,139 +643,6 @@ async function completeLesson(stars: number) {
   render();
 }
 
-async function renderSettings() {
-  let body = `<p class="muted">…</p>`;
-  try {
-    const data = await api.getAiSettings();
-    const c = data.config;
-    const hint =
-      locale === "zh-Hant"
-        ? data.hints.zhHant
-        : locale === "ja"
-          ? data.hints.ja
-          : data.hints.en;
-    const presets = data.presets
-      .map(
-        (p) =>
-          `<option value="${p.id}" data-url="${escapeHtml(p.baseUrl)}" data-model="${escapeHtml(p.model)}" data-provider="${escapeHtml(p.provider)}">${escapeHtml(p.label)}</option>`,
-      )
-      .join("");
-    body = `
-      <p class="muted">${escapeHtml(hint || "")}</p>
-      <label>${t(locale, "preset")}
-        <select id="preset"><option value="">—</option>${presets}</select>
-      </label>
-      <label>${t(locale, "provider")}
-        <select id="provider">
-          <option value="auto" ${c.provider === "auto" ? "selected" : ""}>auto（BYOK 種類自動）</option>
-          <option value="openai_compatible" ${c.provider === "openai_compatible" ? "selected" : ""}>openai_compatible（第三方種類）</option>
-          <option value="xai" ${c.provider === "xai" ? "selected" : ""}>xai（第三方種類）</option>
-          <option value="google" ${c.provider === "google" ? "selected" : ""}>google（第三方種類）</option>
-          <option value="workers_ai" ${c.provider === "workers_ai" ? "selected" : ""}>僅 CF（無第三方）</option>
-          <option value="none" ${c.provider === "none" ? "selected" : ""}>僅本地句庫</option>
-        </select>
-        <p class="muted">預設永遠：CF 免費 → 第三方 → 本地。選 openai/xai/google 只表示「第三方怎麼連」，不會跳過 CF。</p>
-      </label>
-      <label>${t(locale, "base_url")}
-        <input id="baseUrl" type="url" placeholder="https://api.x.ai/v1" value="${escapeHtml(c.baseUrl)}" />
-      </label>
-      <label>${t(locale, "api_key")}
-        <input id="apiKey" type="password" autocomplete="off" placeholder="${escapeHtml(c.apiKeyHint || "sk-…")}" />
-      </label>
-      <label>${t(locale, "model")}
-        <input id="model" value="${escapeHtml(c.model)}" placeholder="grok-4.5 / llama-3.1-8b-instant" />
-      </label>
-      <label class="check">
-        <input type="checkbox" id="preferByok" ${c.preferByok ? "checked" : ""} />
-        ${t(locale, "prefer_byok")}
-      </label>
-      <div class="row">
-        <button class="primary" id="saveAi">${t(locale, "save")}</button>
-        <button id="testAi">${t(locale, "test_ai")}</button>
-        <button id="clearKey">${t(locale, "clear_key")}</button>
-        <button id="home">${t(locale, "home")}</button>
-      </div>
-      <p class="err" id="setMsg"></p>
-    `;
-  } catch (e) {
-    body = `<p class="err">${escapeHtml(String((e as Error).message))}</p>
-      <button id="home">${t(locale, "home")}</button>`;
-  }
-
-  shell(`
-    <div class="card">
-      <h2>${t(locale, "settings_title")}</h2>
-      ${body}
-    </div>
-  `);
-
-  document.querySelector("#home")?.addEventListener("click", () => {
-    route = "map";
-    void renderMap();
-  });
-  document.querySelector("#preset")?.addEventListener("change", (e) => {
-    const opt = (e.target as HTMLSelectElement).selectedOptions[0];
-    if (!opt || !opt.value) return;
-    const url = opt.dataset.url || "";
-    const model = opt.dataset.model || "";
-    const provider = opt.dataset.provider || "openai_compatible";
-    const bu = document.querySelector("#baseUrl") as HTMLInputElement | null;
-    const md = document.querySelector("#model") as HTMLInputElement | null;
-    const pr = document.querySelector("#provider") as HTMLSelectElement | null;
-    if (bu) bu.value = url;
-    if (md) md.value = model;
-    if (pr) pr.value = provider;
-  });
-  document.querySelector("#saveAi")?.addEventListener("click", async () => {
-    const msg = document.querySelector("#setMsg");
-    try {
-      await api.saveAiSettings({
-        provider: (document.querySelector("#provider") as HTMLSelectElement).value,
-        baseUrl: (document.querySelector("#baseUrl") as HTMLInputElement).value.trim(),
-        apiKey: (document.querySelector("#apiKey") as HTMLInputElement).value,
-        model: (document.querySelector("#model") as HTMLInputElement).value.trim(),
-        preferByok: (document.querySelector("#preferByok") as HTMLInputElement).checked,
-      });
-      if (msg) msg.textContent = t(locale, "saved");
-      // clear password field after save
-      const k = document.querySelector("#apiKey") as HTMLInputElement | null;
-      if (k) k.value = "";
-    } catch (err) {
-      if (msg) msg.textContent = String((err as Error).message);
-    }
-  });
-  document.querySelector("#clearKey")?.addEventListener("click", async () => {
-    const msg = document.querySelector("#setMsg");
-    try {
-      await api.saveAiSettings({ clearApiKey: true });
-      if (msg) msg.textContent = t(locale, "saved");
-    } catch (err) {
-      if (msg) msg.textContent = String((err as Error).message);
-    }
-  });
-  document.querySelector("#testAi")?.addEventListener("click", async () => {
-    const msg = document.querySelector("#setMsg");
-    if (msg) msg.textContent = "…";
-    try {
-      // save first if fields filled
-      const key = (document.querySelector("#apiKey") as HTMLInputElement)?.value;
-      if (key) {
-        await api.saveAiSettings({
-          provider: (document.querySelector("#provider") as HTMLSelectElement).value,
-          baseUrl: (document.querySelector("#baseUrl") as HTMLInputElement).value.trim(),
-          apiKey: key,
-          model: (document.querySelector("#model") as HTMLInputElement).value.trim(),
-          preferByok: (document.querySelector("#preferByok") as HTMLInputElement).checked,
-        });
-      }
-      const r = await api.testAiSettings();
-      if (msg) msg.textContent = r.ok ? `OK: ${r.sample || "ok"}` : r.error || "fail";
-    } catch (err) {
-      if (msg) msg.textContent = String((err as Error).message);
-    }
-  });
-}
-
 async function askCoach() {
   try {
     const c = await api.coach({
@@ -790,13 +652,13 @@ async function askCoach() {
       childName: name(),
       lessonId: lessonId,
       boardSummary: `toPlay=${board.toPlay} capB=${board.captured.black}`,
-    }) as { say: string; reminder?: string; source?: string };
+    });
     statusMsg = c.reminder ? `${c.say}\n—— ${c.reminder}` : c.say;
   } catch {
     statusMsg =
       locale === "zh-Hant"
-        ? `${name()}，先數數氣再下！`
-        : `${name()}, count liberties!`;
+        ? `${name()}，先數數氣再下！金角銀邊草肚皮～`
+        : `${name()}, count liberties! Corners before center!`;
   }
   render();
 }
@@ -839,7 +701,10 @@ async function renderParent() {
   try {
     const s = await api.parentSummary(locale);
     const skills = s.skills
-      .map((sk) => `<li><strong>${escapeHtml(sk.lessonId)}</strong> · ${escapeHtml(sk.skill)} · ${"★".repeat(sk.stars)}</li>`)
+      .map(
+        (sk) =>
+          `<li><strong>${escapeHtml(sk.lessonId)}</strong> · ${escapeHtml(sk.skill)} · ${"★".repeat(sk.stars)}</li>`,
+      )
       .join("");
     const badges = s.badges.length
       ? s.badges.map((b) => `<span class="badge-pill">${escapeHtml(b.name)}</span>`).join(" ")
@@ -882,29 +747,156 @@ function renderPrivacy() {
     locale === "zh-Hant"
       ? `<h2>隱私說明</h2>
         <ul>
-          <li>暱稱與進度存在你的 Cloudflare D1 帳號資料庫。</li>
-          <li>第三方 AI Key 只存在你的用戶設定，介面只顯示末四位。</li>
+          <li>暱稱與進度存在 Cloudflare D1。</li>
+          <li>第三方 AI Key 只存在你的設定，介面只顯示末四位。</li>
           <li>無公開排行榜、無陌生人對戰。</li>
-          <li>教練可先走 Cloudflare 免費 AI；額度到了才用你填的第三方或本地句庫。</li>
+          <li>教練：Cloudflare 免費 AI → 第三方 → 本地句庫。</li>
         </ul>`
       : locale === "ja"
         ? `<h2>プライバシー</h2>
         <ul>
-          <li>ニックネームと進捗は Cloudflare D1 に保存されます。</li>
-          <li>第三者 API Key はあなたの設定にのみ保存（表示は末尾のみ）。</li>
-          <li>公開ランキングや見知らぬ人との対局はありません。</li>
+          <li>進捗は Cloudflare D1 に保存。</li>
+          <li>API Key は設定にのみ保存（末尾のみ表示）。</li>
+          <li>公開ランキングなし。</li>
         </ul>`
         : `<h2>Privacy</h2>
         <ul>
-          <li>Nickname and progress are stored in your Cloudflare D1 database.</li>
-          <li>Third-party API keys stay in your account settings (UI shows last 4 chars only).</li>
-          <li>No public leaderboards or stranger matchmaking.</li>
-          <li>Coach uses Cloudflare free AI first, then your BYOK, then offline phrases.</li>
+          <li>Progress stored in Cloudflare D1.</li>
+          <li>API keys in your settings only (last 4 chars shown).</li>
+          <li>No public leaderboards.</li>
+          <li>Coach: CF free AI → BYOK → offline phrases.</li>
         </ul>`;
   shell(`<div class="card">${body}<button class="primary" id="home">${t(locale, "home")}</button></div>`);
   document.querySelector("#home")?.addEventListener("click", () => {
     route = "map";
     void renderMap();
+  });
+}
+
+async function renderSettings() {
+  let body = `<p class="muted">…</p>`;
+  try {
+    const data = await api.getAiSettings();
+    const c = data.config;
+    const hint =
+      locale === "zh-Hant"
+        ? data.hints.zhHant
+        : locale === "ja"
+          ? data.hints.ja
+          : data.hints.en;
+    const presets = data.presets
+      .map(
+        (p) =>
+          `<option value="${p.id}" data-url="${escapeHtml(p.baseUrl)}" data-model="${escapeHtml(p.model)}" data-provider="${escapeHtml(p.provider)}">${escapeHtml(p.label)}</option>`,
+      )
+      .join("");
+    body = `
+      <p class="muted">${escapeHtml(hint || "")}</p>
+      <label>${t(locale, "preset")}
+        <select id="preset"><option value="">—</option>${presets}</select>
+      </label>
+      <label>${t(locale, "provider")}
+        <select id="provider">
+          <option value="auto" ${c.provider === "auto" ? "selected" : ""}>auto</option>
+          <option value="openai_compatible" ${c.provider === "openai_compatible" ? "selected" : ""}>openai_compatible</option>
+          <option value="xai" ${c.provider === "xai" ? "selected" : ""}>xai</option>
+          <option value="google" ${c.provider === "google" ? "selected" : ""}>google</option>
+          <option value="workers_ai" ${c.provider === "workers_ai" ? "selected" : ""}>workers_ai only</option>
+          <option value="none" ${c.provider === "none" ? "selected" : ""}>none</option>
+        </select>
+      </label>
+      <label>${t(locale, "base_url")}
+        <input id="baseUrl" type="url" placeholder="https://api.x.ai/v1" value="${escapeHtml(c.baseUrl)}" />
+      </label>
+      <label>${t(locale, "api_key")}
+        <input id="apiKey" type="password" autocomplete="off" placeholder="${escapeHtml(c.apiKeyHint || "sk-…")}" />
+      </label>
+      <label>${t(locale, "model")}
+        <input id="model" value="${escapeHtml(c.model)}" />
+      </label>
+      <label class="check">
+        <input type="checkbox" id="preferByok" ${c.preferByok ? "checked" : ""} />
+        ${t(locale, "prefer_byok")}
+      </label>
+      <div class="row">
+        <button class="primary" id="saveAi">${t(locale, "save")}</button>
+        <button id="testAi">${t(locale, "test_ai")}</button>
+        <button id="clearKey">${t(locale, "clear_key")}</button>
+        <button id="home">${t(locale, "home")}</button>
+      </div>
+      <p class="err" id="setMsg"></p>
+    `;
+  } catch (e) {
+    body = `<p class="err">${escapeHtml(String((e as Error).message))}</p>
+      <button id="home">${t(locale, "home")}</button>`;
+  }
+
+  shell(`
+    <div class="card">
+      <h2>${t(locale, "settings_title")}</h2>
+      ${body}
+    </div>
+  `);
+
+  document.querySelector("#home")?.addEventListener("click", () => {
+    route = "map";
+    void renderMap();
+  });
+  document.querySelector("#preset")?.addEventListener("change", (e) => {
+    const opt = (e.target as HTMLSelectElement).selectedOptions[0];
+    if (!opt || !opt.value) return;
+    const bu = document.querySelector("#baseUrl") as HTMLInputElement | null;
+    const md = document.querySelector("#model") as HTMLInputElement | null;
+    const pr = document.querySelector("#provider") as HTMLSelectElement | null;
+    if (bu) bu.value = opt.dataset.url || "";
+    if (md) md.value = opt.dataset.model || "";
+    if (pr) pr.value = opt.dataset.provider || "openai_compatible";
+  });
+  document.querySelector("#saveAi")?.addEventListener("click", async () => {
+    const msg = document.querySelector("#setMsg");
+    try {
+      await api.saveAiSettings({
+        provider: (document.querySelector("#provider") as HTMLSelectElement).value,
+        baseUrl: (document.querySelector("#baseUrl") as HTMLInputElement).value.trim(),
+        apiKey: (document.querySelector("#apiKey") as HTMLInputElement).value,
+        model: (document.querySelector("#model") as HTMLInputElement).value.trim(),
+        preferByok: (document.querySelector("#preferByok") as HTMLInputElement).checked,
+      });
+      if (msg) msg.textContent = t(locale, "saved");
+      const k = document.querySelector("#apiKey") as HTMLInputElement | null;
+      if (k) k.value = "";
+    } catch (err) {
+      if (msg) msg.textContent = String((err as Error).message);
+    }
+  });
+  document.querySelector("#clearKey")?.addEventListener("click", async () => {
+    const msg = document.querySelector("#setMsg");
+    try {
+      await api.saveAiSettings({ clearApiKey: true });
+      if (msg) msg.textContent = t(locale, "saved");
+    } catch (err) {
+      if (msg) msg.textContent = String((err as Error).message);
+    }
+  });
+  document.querySelector("#testAi")?.addEventListener("click", async () => {
+    const msg = document.querySelector("#setMsg");
+    if (msg) msg.textContent = "…";
+    try {
+      const key = (document.querySelector("#apiKey") as HTMLInputElement)?.value;
+      if (key) {
+        await api.saveAiSettings({
+          provider: (document.querySelector("#provider") as HTMLSelectElement).value,
+          baseUrl: (document.querySelector("#baseUrl") as HTMLInputElement).value.trim(),
+          apiKey: key,
+          model: (document.querySelector("#model") as HTMLInputElement).value.trim(),
+          preferByok: (document.querySelector("#preferByok") as HTMLInputElement).checked,
+        });
+      }
+      const r = await api.testAiSettings();
+      if (msg) msg.textContent = r.ok ? `OK: ${r.sample || "ok"}` : r.error || "fail";
+    } catch (err) {
+      if (msg) msg.textContent = String((err as Error).message);
+    }
   });
 }
 

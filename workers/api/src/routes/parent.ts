@@ -7,18 +7,18 @@ const parent = new Hono<{ Bindings: Env }>();
 
 /** Skills each lesson emphasizes (for parent-facing summary) */
 const LESSON_SKILLS: Record<string, { ja: string; "zh-Hant": string; en: string }> = {
-  L01: { ja: "順番・ルール", "zh-Hant": "輪流與規則", en: "Turns & rules" },
-  L02: { ja: "呼吸（気）を数える", "zh-Hant": "數氣／觀察", en: "Counting liberties" },
-  L03: { ja: "取る・因果", "zh-Hant": "吃子與因果", en: "Capture & cause-effect" },
-  L04: { ja: "危機で逃げる", "zh-Hant": "危機時先逃", en: "Escape under pressure" },
-  L05: { ja: "一手先を読む", "zh-Hant": "一步預見", en: "One-move foresight" },
-  L06: { ja: "効率（一石二鳥）", "zh-Hant": "效率（一子兩用）", en: "Efficiency" },
-  L07: { ja: "ルールの境界", "zh-Hant": "規則邊界", en: "Rule boundaries" },
-  L08: { ja: "生きる形", "zh-Hant": "做活意識", en: "Living shape" },
-  L09: { ja: "手順", "zh-Hant": "次序", en: "Move order" },
-  L10: { ja: "角から", "zh-Hant": "先角後邊", en: "Corners first" },
-  L11: { ja: "つなげる", "zh-Hant": "連結", en: "Connection" },
-  L12: { ja: "総合", "zh-Hant": "綜合運用", en: "Integration" },
+  L01: { ja: "盤・順番・交点", "zh-Hant": "棋盤・輪流・交叉點", en: "Board, turns, intersections" },
+  L02: { ja: "気（呼吸）", "zh-Hant": "氣（呼吸）", en: "Liberties" },
+  L03: { ja: "取り／吃子", "zh-Hant": "提子／吃子", en: "Capture" },
+  L04: { ja: "アタリ・逃げ", "zh-Hant": "叫吃・逃・長", en: "Atari & escape" },
+  L05: { ja: "アタリを見つける", "zh-Hant": "預見叫吃", en: "Spotting atari" },
+  L06: { ja: "連結", "zh-Hant": "連接", en: "Connection" },
+  L07: { ja: "両アタリ", "zh-Hant": "雙叫吃", en: "Double atari" },
+  L08: { ja: "切断", "zh-Hant": "切斷", en: "Cut" },
+  L09: { ja: "真眼・仮眼", "zh-Hant": "真眼・假眼", en: "True & false eyes" },
+  L10: { ja: "金角銀辺草中腹", "zh-Hant": "金角銀邊草肚皮", en: "Corner / side / center" },
+  L11: { ja: "辺の感覚", "zh-Hant": "銀邊練習", en: "Side sense" },
+  L12: { ja: "取り総合", "zh-Hant": "吃子綜合練習", en: "Capture review" },
 };
 
 const BADGE_NAMES: Record<string, { ja: string; "zh-Hant": string; en: string }> = {
@@ -27,12 +27,12 @@ const BADGE_NAMES: Record<string, { ja: string; "zh-Hant": string; en: string }>
   first_capture: { ja: "初捕獲", "zh-Hant": "初降小妖", en: "First capture" },
   escape: { ja: "脱困", "zh-Hant": "脫困", en: "Escape" },
   atari_eye: { ja: "火眼", "zh-Hant": "火眼預見", en: "Fiery eyes" },
-  double: { ja: "両用", "zh-Hant": "一變兩用", en: "Double duty" },
-  rules: { ja: "守戒", "zh-Hant": "守戒", en: "Discipline" },
+  connect: { ja: "連結", "zh-Hant": "師徒同心", en: "Connect" },
+  double: { ja: "両アタリ", "zh-Hant": "雙叫吃", en: "Double atari" },
+  cut: { ja: "切断", "zh-Hant": "切斷", en: "Cut" },
   eyes: { ja: "眼", "zh-Hant": "辨真假", en: "Eyes" },
-  order: { ja: "次序", "zh-Hant": "次序關", en: "Order" },
-  corner: { ja: "安営", "zh-Hant": "先安營", en: "Camp" },
-  connect: { ja: "同心", "zh-Hant": "師徒同心", en: "Together" },
+  corner: { ja: "金角", "zh-Hant": "金角銀邊", en: "Golden corner" },
+  side_camp: { ja: "銀辺", "zh-Hant": "銀邊官道", en: "Silver side" },
   gate: { ja: "山門", "zh-Hant": "小山門", en: "Gate trial" },
 };
 
