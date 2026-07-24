@@ -3,20 +3,18 @@
 > **版本**：v0.4.1  
 > **更新**：2026-07-24  
 
-## 網址（請用這個）
+## 網址
 
-| | |
-|--|--|
-| **主網址** | **https://kids-go.phrixusjhon.workers.dev** |
-| 自訂域 | `igo.142857.eu.cc` — DNS+路由已配好；**部分網路（含本機 dig→0.0.0.0）連不上 `.eu.cc`**，見 DOMAIN.md |
-| GitHub | https://github.com/AI-Phrixus/kids-go |
+| 優先 | URL |
+|------|-----|
+| **主** | **https://go.tdtc.indevs.in** |
+| 備 | https://go.tdtc.dpdns.org |
+| 備 | https://kids-go.phrixusjhon.workers.dev |
 
-## 域名任務回報（已收）
+GitHub：https://github.com/AI-Phrixus/kids-go  
 
-- ✅ CNAME + Worker Custom Domain 已完成  
-- ⚠️ 本環境與部分網路無法連 `142857.eu.cc` 根域（非 igo 單獨問題）  
-- ✅ 產品在 workers.dev 健康：`/api/health` → 0.4.1  
+## 說明
 
-## 功能
-
-L01–L20 · 三語 · 護眼 · 家長摘要 · CF 免費 AI 優先 · Free 方案已確認  
+- 曾配 `igo.142857.eu.cc`，但部分網路對 `.eu.cc` 解析成 `0.0.0.0`，故改主域為 **go.tdtc.indevs.in**（已 curl 200）。  
+- Cloudflare Workers **Free** 已確認。  
+- 課綱 L01–L20 · CF 免費 AI 優先 · 護眼 · 家長摘要。  

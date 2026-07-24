@@ -2,7 +2,7 @@
 
 | 目標 | 狀態 |
 |------|------|
-| Cloudflare Free 部署 | ✅ workers.dev + **igo.142857.eu.cc** |
+| Cloudflare Free 部署 | ✅ **https://go.tdtc.indevs.in** + workers.dev |
 | 小四戰略思維／寓教於樂 | ✅ |
 | 教程 + 課後人機 | ✅ L01–L20 |
 | 兒童基礎練習（氣吃叫吃連斷雙吃眼金角門吃抱吃征劫倒撲對殺） | ✅ |
@@ -14,7 +14,7 @@
 | 西遊敘事 | ✅ |
 | 家長摘要 + 暑假使用統計 | ✅ |
 | 自由吃子賽 | ✅ |
-| 自訂域名 | 🟡 路由已配 `igo.142857.eu.cc`；DNS CNAME 需你在 CF 面板點一下（無 DNS 寫權限） |
+| 自訂域名 | ✅ **go.tdtc.indevs.in**（主）· go.tdtc.dpdns.org（備） |
 | 吉祥物／動效／音效 | ✅ SVG + Web Audio |
 | 隱私說明加長 | ✅ |
 

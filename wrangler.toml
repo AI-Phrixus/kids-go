@@ -9,7 +9,6 @@ database_name = "kids-go"
 database_id = "35d8acbd-2abd-4a68-b62e-88dfa1f0fd0d"
 migrations_dir = "migrations"
 
-# Cloudflare Workers AI (free tier hard-stop when plan stays Free)
 [ai]
 binding = "AI"
 
@@ -18,7 +17,15 @@ directory = "./apps/web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
-# Custom domain on existing zone 142857.eu.cc
+# Primary human URL (verified live). Extra routes kept as backup.
+[[routes]]
+pattern = "go.tdtc.indevs.in/*"
+zone_name = "tdtc.indevs.in"
+
+[[routes]]
+pattern = "go.tdtc.dpdns.org/*"
+zone_name = "tdtc.dpdns.org"
+
 [[routes]]
 pattern = "igo.142857.eu.cc/*"
 zone_name = "142857.eu.cc"
