@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { hashPassword, hashPin, uid, verifyPassword, verifyPin } from "../crypto";
 import {
   clearSessionCookie,
+  cookieSecureFromRequest,
   createSession,
   loadSession,
   sessionCookie,
@@ -10,6 +11,11 @@ import {
 import type { Env, Locale } from "../types";
 
 const auth = new Hono<{ Bindings: Env }>();
+
+function setSessionHeader(c: { req: { raw: Request }; header: (k: string, v: string) => void }, sid: string) {
+  const secure = cookieSecureFromRequest(c.req.raw);
+  c.header("Set-Cookie", sessionCookie(sid, secure));
+}
 
 /** Simple in-memory rate limit (per isolate; best-effort on Free). */
 const hits = new Map<string, { n: number; t: number }>();
@@ -70,7 +76,7 @@ auth.post("/register/parent", async (c) => {
   ]);
 
   const sid = await createSession(c.env, userId, childId);
-  c.header("Set-Cookie", sessionCookie(sid));
+  setSessionHeader(c, sid);
   return c.json({ ok: true, userId, childId });
 });
 
@@ -84,6 +90,12 @@ auth.post("/register/quick", async (c) => {
   if (!nick || !/^\d{4,6}$/.test(pin)) {
     return c.json({ error: "invalid_input", hint: "nickname + 4-6 digit pin" }, 400);
   }
+  const taken = await c.env.DB.prepare(
+    `SELECT id FROM users WHERE kind = 'quick' AND display_name = ?`,
+  )
+    .bind(nick)
+    .first();
+  if (taken) return c.json({ error: "nickname_taken" }, 409);
   const userId = uid();
   const childId = uid();
   const now = Date.now();
@@ -103,7 +115,7 @@ auth.post("/register/quick", async (c) => {
     ).bind(childId, now),
   ]);
   const sid = await createSession(c.env, userId, childId);
-  c.header("Set-Cookie", sessionCookie(sid));
+  setSessionHeader(c, sid);
   return c.json({ ok: true, userId, childId });
 });
 
@@ -134,7 +146,7 @@ auth.post("/login", async (c) => {
       .bind(user.id)
       .first<{ id: string }>();
     const sid = await createSession(c.env, user.id, child?.id ?? null);
-    c.header("Set-Cookie", sessionCookie(sid));
+    setSessionHeader(c, sid);
     return c.json({ ok: true });
   }
 
@@ -154,7 +166,7 @@ auth.post("/login", async (c) => {
     .bind(user.id)
     .first<{ id: string }>();
   const sid = await createSession(c.env, user.id, child?.id ?? null);
-  c.header("Set-Cookie", sessionCookie(sid));
+  setSessionHeader(c, sid);
   return c.json({ ok: true });
 });
 
@@ -163,7 +175,7 @@ auth.post("/logout", async (c) => {
   if (sess) {
     await c.env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(sess.sessionId).run();
   }
-  c.header("Set-Cookie", clearSessionCookie());
+  c.header("Set-Cookie", clearSessionCookie(cookieSecureFromRequest(c.req.raw)));
   return c.json({ ok: true });
 });
 

@@ -102,7 +102,7 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.4.0 · <span id="mins">0</span> min · Cloudflare Free
+      v0.4.1 · <span id="mins">0</span> min · Cloudflare Free
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle">${sfxEnabled() ? "🔊" : "🔇"}</button>
     </p>
@@ -119,7 +119,7 @@ function shell(body: string) {
   document.querySelector("#locale")?.addEventListener("change", (e) => {
     locale = (e.target as HTMLSelectElement).value as Locale;
     saveLocale();
-    void api.saveLocale?.(locale).catch(() => undefined);
+    void api.saveLocale(locale).catch(() => undefined);
     render();
   });
 }
@@ -567,22 +567,15 @@ function onTap(x: number, y: number) {
             : locale === "ja"
               ? `${name()}、せいかい！`
               : `${name()}, correct!`;
-        if (!board.grid[idx(board.size, x, y)]) {
-          const next = tryPlay(board, x, y);
-          if (next) {
-            board = next;
-            lastMove = { x, y };
-            sfx.place();
-          }
-        } else {
-          lastMove = { x, y };
-        }
+        // Quiz taps only highlight — do NOT tryPlay (would flip toPlay and break multi-step quizzes)
+        lastMove = { x, y };
         stepIndex++;
         if (stepIndex >= lesson.steps.length) {
           phase = "battle";
           board = setupBoard(lesson);
           lastMove = null;
           humanMoves = 0;
+          statusMsg = pickLocaleText(locale, lesson.goal, name());
         }
         render();
       } else {
@@ -664,13 +657,12 @@ function handleBattleMove(x: number, y: number) {
     render();
     return;
   }
+  const beforeBlackCap = board.captured.black;
   board = next;
   lastMove = { x, y };
   humanMoves++;
   sfx.place();
-  if (board.captured.black > 0 || board.captured.white > 0) {
-    /* capture sound if last move captured — approximate */
-  }
+  if (board.captured.black > beforeBlackCap) sfx.capture();
 
   if (mode === "place_n") {
     const need = lesson.battle.n ?? 10;
@@ -707,6 +699,7 @@ function handleBattleMove(x: number, y: number) {
       }
     }
     if (board.captured.black >= need) {
+      sfx.capture();
       void completeLesson(3);
       return;
     }

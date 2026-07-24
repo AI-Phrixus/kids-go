@@ -10,7 +10,8 @@
     "build:web": "vite build --config apps/web/vite.config.ts",
     "deploy": "npm run build:web && wrangler deploy",
     "db:local": "wrangler d1 migrations apply kids-go --local",
-    "db:remote": "wrangler d1 migrations apply kids-go --remote"
+    "db:remote": "wrangler d1 migrations apply kids-go --remote",
+    "test:engine": "npx --yes tsx -e \"import { createEmptyBoard, tryPlay, idx } from './packages/go-engine/src/index.ts'; const b=createEmptyBoard(9); const g=b.grid.slice(); g[idx(9,2,2)]='white'; g[idx(9,1,2)]='black'; g[idx(9,3,2)]='black'; g[idx(9,2,1)]='black'; const c=tryPlay({...b,grid:g,toPlay:'black'},2,3); if(!c||c.grid[idx(9,2,2)]!==null) throw new Error('capture fail'); console.log('engine ok');\""
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250705.0",

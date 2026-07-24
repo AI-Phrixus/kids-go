@@ -11,10 +11,16 @@ function wouldCapture(state: BoardState, m: Point): number {
   );
 }
 
-function selfInAtariAfter(state: BoardState, m: Point, color: Color): boolean {
+function selfInAtariAfter(state: BoardState, m: Point, _color: Color): boolean {
   const next = tryPlay(state, m.x, m.y);
   if (!next) return true;
-  return groupLiberties(next, m.x, m.y) <= 1;
+  // Only penalize pure self-atari when the move did not capture (suicide-ish)
+  const capt =
+    next.captured.black +
+    next.captured.white -
+    (state.captured.black + state.captured.white);
+  if (capt > 0) return false;
+  return groupLiberties(next, m.x, m.y) === 1;
 }
 
 /** Weak teaching AI — prefers capture/escape; avoids obvious self-atari when level≥1. */

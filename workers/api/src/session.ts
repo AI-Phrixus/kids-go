@@ -19,13 +19,20 @@ export async function createSession(
   return id;
 }
 
-/** Secure flag works on localhost in modern browsers; keep SameSite=Lax. */
-export function sessionCookie(id: string): string {
-  return `${COOKIE}=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`;
+/** Secure on HTTPS production; omit on http localhost for local wrangler. */
+export function sessionCookie(id: string, secure = true): string {
+  const sec = secure ? "; Secure" : "";
+  return `${COOKIE}=${id}; Path=/; HttpOnly; SameSite=Lax${sec}; Max-Age=${30 * 24 * 3600}`;
 }
 
-export function clearSessionCookie(): string {
-  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+export function clearSessionCookie(secure = true): string {
+  const sec = secure ? "; Secure" : "";
+  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax${sec}; Max-Age=0`;
+}
+
+export function cookieSecureFromRequest(request: Request): boolean {
+  const url = new URL(request.url);
+  return url.protocol === "https:";
 }
 
 export function readSessionId(cookieHeader: string | undefined): string | null {
