@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Engine tests
+        run: npm run test:engine
+      - name: Lesson validation (winnability + trilingual)
+        run: npm run validate:lessons
+      - name: Locale parity
+        run: npm run check:locales
+      - name: Adversarial security suite (3 rounds)
+        run: npm run test:adversarial
+      - name: Build web
+        run: npm run build:web

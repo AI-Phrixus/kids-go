@@ -1,7 +1,25 @@
 # 狀態快照
 
-> **版本**：v0.7.5  
-> **更新**：2026-07-24  
+> **版本**：v0.8.0  
+> **更新**：2026-07-26  
+
+## v0.8.0 大版本（引擎/安全/課程/UI/重構）
+
+**P0 修復**：護眼遮罩事件委派修復（非同步屏幕上可正常關閉）；引擎 ko 條件補上「提子自身入氣=1」（解鎖倒撲）；SW 快取鍵由版本生成 + HTML network-first（返回用戶能升級）；popstate 返回鍵；鍵盤焦點跨手保持；星數真實計算；休息倒數讀設定；教練解析失敗不再輸出原始模型文字；版本號單一來源（`scripts/sync-version.mjs`）。
+
+**引擎 v2**（`packages/go-engine`）：正確劫規則 + positional superko；`score()`/`gameResult()`/`territoryMap()`（日本規則數目 + 貼目）；`pass()`/`isGameOver()` 進 board.ts + BoardState 記 consecutivePasses/moveNumber/history；三檔真實分級 AI（L2 兩層搜尋，自對弈 L2>L1 ≈77%、L1>L0 100%）；真眼偵測（不填自己的眼）+ pass 策略；整數索引 flood fill；**74 條斷言測試**。
+
+**後端安全**：CORS 白名單（取代反射任意 origin）；session **SHA-256 雜湊存儲** + 登入輪換（明文回退僅限 UUID 形狀，杜絕雜湊 id 重放）；PIN/密碼**失敗鎖定**（指數退避）；`/api/health` 靜態化（零 D1 寫入）；熱路徑移除 DDL；events/games/friends 補限流；`moves_json` 32KB 上限 + 欄位驗證；progress status 嚴格枚舉（不再 500）；BYOK **SSRF 防護** + 家長密碼/PIN 重新驗證；好友列表 N+1 改 JOIN；HSTS/object-src/frame-ancestors；`app.onError`；每日 cron 清理過期 session 與舊事件；遷移 0006–0008。
+
+**教練管線**：**輸出安全過濾**（與聊天共用 blocklist + 語言文字驗證 + 句數上限，失敗回退句庫）；AbortController + 8s 總鏈 deadline（單槽 2.5s）；D1 熔斷器（3 次失敗跳過）；Cache API 回應快取（{{name}} 佔位符，可跨孩子共用，名字不外送）；Groq/OpenRouter JSON mode + Gemini responseSchema + safetySettings 最嚴；取消按小時輪換；句庫按 skillTag 分組；provider 失敗遙測。
+
+**課程**：修正 L07/L16/L18/L19（名實相符，腳本序列由引擎導出）；place_n 課加 goal 判定；aiLevel 曲線；**新增 L21–L26**（引征/劫爭/做眼/殺眼/對殺數氣/官子數地，取經歸途線，三語）；徽章本地化。
+
+**UI/UX**：SVG 棋盤（畫線 + 星位 + 交叉點落子 + 座標）+ 落子/提子動畫 + AI 思考延遲；提子托盤；勝利 confetti + 徽章解鎖動畫；≥768px 平板橫排；44px 觸控目標 + 震動；終局數地面板 + 地盤標記。
+
+**重構**：main.ts 2341 行 → main(啟動)/state/router/shell/events/screens/*/board/battle/friends/coach 等模組；後端抽出 middleware（cors/rateLimit/guards/body）+ shared/blocklist + ssrf；刪 providers/none.ts。
+
+**測試/CI**：GitHub Actions（typecheck + engine + validate-lessons + check-locales + 三輪紅藍對抗 + build）；`validate-lessons.ts` 於 CI 模擬每課解出（26/26 可通關）；`adversarial.test.ts` 三輪 150/150（本輪即揪出並修復一個 session 重放漏洞）。
 
 ## v0.7.5 奇幻體驗收尾
 

@@ -48,10 +48,10 @@ export function publicAiConfig(cfg: AiConfig) {
     preferByok: cfg.preferByok,
     hasApiKey: key.length > 0,
     apiKeyHint: key.length > 4 ? `••••${key.slice(-4)}` : key ? "••••" : "",
-    /** UI copy: chain is always CF-first unless preferByok */
+    /** UI copy — matches the real free_first chain (v0.8.0) */
     chain: cfg.preferByok
-      ? "byok → static"
-      : "cloudflare_free → byok → static",
+      ? "byok → free_high → cf_soft → static"
+      : "free_high → cf_soft → byok → static",
   };
 }
 

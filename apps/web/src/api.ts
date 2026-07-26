@@ -56,10 +56,10 @@ export const api = {
       child: { id: string; nickname: string };
     }>("/api/lessons"),
   lesson: (id: string) => req<{ lesson: LessonDetail }>(`/api/lessons/${id}`),
-  complete: (lessonId: string, stars = 2) =>
+  complete: (lessonId: string, stars = 2, extra?: { hintsUsed?: number; movesUsed?: number }) =>
     req(`/api/progress/${lessonId}`, {
       method: "POST",
-      body: JSON.stringify({ status: "completed", stars }),
+      body: JSON.stringify({ status: "completed", stars, ...extra }),
     }),
   saveGame: (body: unknown) =>
     req("/api/games", { method: "POST", body: JSON.stringify(body) }),
@@ -102,11 +102,13 @@ export const api = {
     model?: string;
     preferByok?: boolean;
     clearApiKey?: boolean;
+    /** v0.8.0: parent password / PIN re-auth required for changes */
+    credential?: string;
   }) => req("/api/settings/ai", { method: "PUT", body: JSON.stringify(body) }),
-  testAiSettings: () =>
+  testAiSettings: (credential: string) =>
     req<{ ok: boolean; sample?: string; error?: string }>("/api/settings/ai/test", {
       method: "POST",
-      body: "{}",
+      body: JSON.stringify({ credential }),
     }),
   parentSummary: (locale: string) =>
     req<{
@@ -182,20 +184,55 @@ export const api = {
     ),
 };
 
+/* ---------------- lesson content types (v0.8.0 battle system v2) ---------------- */
+
+export type Pt = { x: number; y: number };
+
+export type GoalPredicate =
+  | { type: "connected"; points: Pt[] }
+  | { type: "occupy"; points: Pt[]; anyOf?: number }
+  | { type: "two_eyes"; group: Pt }
+  | { type: "group_captured"; points: Pt[] }
+  | { type: "capture_at_least"; n: number }
+  | { type: "territory_lead"; margin?: number; komi?: number }
+  | { type: "all"; of: GoalPredicate[] };
+
+export type SequenceStep = {
+  /** accepted player moves at this index */
+  expect: Pt[] | "any-capture" | "any-atari" | "pass";
+  /** scripted AI answer; "ai" = engine move at spec.aiLevel */
+  reply?: Pt | "pass" | "ai";
+  /** i18n text shown after 2 wrong tries (locale map) */
+  hint?: Record<string, string>;
+  hintKey?: string;
+  sayKey?: string;
+};
+
+export type BattleSpec = {
+  mode: "place_n" | "find_atari" | "capture_n" | "sequence";
+  n?: number;
+  aiLevel?: number;
+  points?: [number, number][];
+  setup?: { x: number; y: number; color: "black" | "white" }[];
+  playerColor?: "black" | "white";
+  /** optional completion gate (v0.8.0) */
+  goal?: GoalPredicate;
+  /** move budget for the 3-star rating */
+  par?: number;
+  /** sequence mode script */
+  script?: SequenceStep[];
+  afterScript?: "won" | "free-to-goal";
+};
+
 export type LessonDetail = {
   id: string;
   boardSize: number;
   badgeId: string;
+  skillTag?: Record<string, string> | string;
   titles: Record<string, string>;
   story: Record<string, string>;
   goal: Record<string, string>;
-  battle: {
-    mode: string;
-    n?: number;
-    aiLevel?: number;
-    points?: [number, number][];
-    setup?: { x: number; y: number; color: "black" | "white" }[];
-  };
+  battle: BattleSpec;
   steps: Array<
     | { type: "story" }
     | { type: "info"; text: Record<string, string> }

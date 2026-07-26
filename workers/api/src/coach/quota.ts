@@ -2,6 +2,9 @@
  * Soft budget for Cloudflare Workers AI free tier.
  * Free plan: hard stop ~10_000 Neurons/day (UTC), no overage charge if you stay Free.
  * Soft limit (default 7_500) switches to BYOK third-party before the hard wall.
+ *
+ * v0.8.0: the coach_quota table is owned by migrations (0002) — the old
+ * ensureQuotaTable() DDL that ran on EVERY request has been removed.
  */
 
 export type QuotaRow = {
@@ -18,33 +21,12 @@ export function utcDay(d = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function ensureQuotaTable(db: D1Database): Promise<void> {
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS coach_quota (
-        day TEXT PRIMARY KEY,
-        cf_success INTEGER NOT NULL DEFAULT 0,
-        cf_fail_quota INTEGER NOT NULL DEFAULT 0,
-        byok_success INTEGER NOT NULL DEFAULT 0,
-        static_fallback INTEGER NOT NULL DEFAULT 0,
-        cf_blocked_soft INTEGER NOT NULL DEFAULT 0,
-        last_alert TEXT
-      )`,
-    )
-    .run();
-}
-
 export async function getQuota(db: D1Database, day: string): Promise<QuotaRow> {
-  await ensureQuotaTable(db);
   const row = await db
     .prepare(`SELECT * FROM coach_quota WHERE day = ?`)
     .bind(day)
     .first<QuotaRow>();
   if (row) return row;
-  await db
-    .prepare(`INSERT OR IGNORE INTO coach_quota (day) VALUES (?)`)
-    .bind(day)
-    .run();
   return {
     day,
     cf_success: 0,
@@ -66,7 +48,6 @@ export async function bumpQuota(
     | "static_fallback"
     | "cf_blocked_soft",
 ): Promise<void> {
-  await ensureQuotaTable(db);
   await db
     .prepare(
       `INSERT INTO coach_quota (day, ${field}) VALUES (?, 1)
@@ -77,7 +58,6 @@ export async function bumpQuota(
 }
 
 export async function setAlert(db: D1Database, day: string, msg: string): Promise<void> {
-  await ensureQuotaTable(db);
   await db
     .prepare(
       `INSERT INTO coach_quota (day, last_alert) VALUES (?, ?)
