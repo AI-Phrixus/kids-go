@@ -1,8 +1,11 @@
 # Kids Igo 交接手冊（新帳號／新 AI 接手必讀）
 
-> 版本：**v0.7.5**  
-> 最後更新：2026-07-24  
+> 版本：**v0.8.0**  
+> 最後更新：2026-07-26  
 > 目的：在**不依賴舊對話**的情況下接續開發與部署。
+
+> **v0.8.0 重點**：前端已從單檔 main.ts 拆分為 `state/router/shell/screens/board/battle/friends`；引擎新增劫修正/超劫/數地/三檔 AI；後端安全全面加固；課程修正並擴充到 **L01–L26**。
+> 開發前先跑 `npm run typecheck && npm test`（引擎 74 斷言 + 26 課可通關模擬 + 三語 parity + 三輪紅藍對抗）。CI 見 `.github/workflows/ci.yml`。
 
 ---
 

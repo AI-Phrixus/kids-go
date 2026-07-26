@@ -8,12 +8,12 @@
 
 | | |
 |--|--|
-| **版本** | **v0.7.5** · L01–L20 · 吉卜力感奇幻 UI |
+| **版本** | **v0.8.0** · L01–L26 · SVG 棋盤 · 數地終局 |
 | **線上** | **https://go.tdtc.indevs.in** · https://go.tdtc.dpdns.org · workers.dev |
 | **目標年齡** | 約 10–11 歲（小四 · 暑假→下學期） |
 | **UI 語言** | 日本語 · 繁體中文 · English |
 | **部署** | Cloudflare Workers Free + D1 Free（assets 一體） |
-| **教練 AI** | 免費高效優先：Groq → OpenRouter free → Gemini free → CF soft → 句庫 |
+| **教練 AI** | 免費高效優先：Groq → OpenRouter free → Gemini free → CF soft → 句庫（輸出安全過濾 + 熔斷 + 快取） |
 | **社交** | 暱稱互加好友 · 短訊聊天 · 邀請分享（無陌生人列表） |
 | **站內說明** | 完整九章「遊戲說明」目錄（三語） |
 | **倉庫** | https://github.com/AI-Phrixus/kids-go |
@@ -29,11 +29,11 @@
 
 ## 這是什麼
 
-- **棋**：9 路啟蒙 → 每課教程後必有人機關卡（弱 AI，保自我效能）  
-- **腦**：預見、連結、取捨、效率等**可遷移戰略標籤**  
-- **故事**：凡敘事以《西遊記》為藍本（悟空教練、休息站八戒幽默等）  
+- **棋**：9 路啟蒙 L01–L26 → 每課教程後必有人機關卡（三檔真實分級 AI，保自我效能）；征子／打劫／倒撲用**腳本序列關卡**真的走得出來；自由對弈雙 pass 進**中國規則數地**  
+- **腦**：預見、連結、取捨、效率等**可遷移戰略標籤**；place_n 課有**目標判定**（連接／佔角／做兩眼），星數依步數/提示/失誤真實計算  
+- **故事**：凡敘事以《西遊記》為藍本（悟空教練、休息站八戒幽默等）；L21–L26 為取經歸途線  
 - **眼**：20–20–20 與角色帶領的護眼儀式（遠眺、眼操…）  
-- **帳號**：家長郵箱 **或** 暱稱+PIN；進度綁孩子檔案  
+- **帳號**：家長郵箱 **或** 暱稱+PIN；進度綁孩子檔案；session 雜湊存儲、失敗鎖定  
 - **夥伴**：暱稱互加好友 + 短訊 + 邀請；可選暗號任務；舒服姿勢提示  
 - **說明**：遊戲內完整使用指南（三語 · 歡迎頁／地圖／頁腳）  
 
@@ -86,7 +86,7 @@ npx wrangler dev
 | [docs/CHARACTER-CARE.md](docs/CHARACTER-CARE.md) | 角色、名字、幻想倫理 |
 | [docs/STORY-XIYOU.md](docs/STORY-XIYOU.md) | 《西遊記》故事憲法 |
 | [docs/PRODUCT.md](docs/PRODUCT.md) | 產品願景 |
-| [docs/CURRICULUM.md](docs/CURRICULUM.md) | 課綱 L01–L12 |
+| [docs/CURRICULUM.md](docs/CURRICULUM.md) | 課綱 L01–L26 |
 | [docs/I18N.md](docs/I18N.md) | 三語與 {{name}} |
 | [docs/COACH-PROVIDERS.md](docs/COACH-PROVIDERS.md) | 可插拔教練 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 工程架構 |
