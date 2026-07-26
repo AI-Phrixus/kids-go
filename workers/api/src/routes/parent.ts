@@ -27,6 +27,12 @@ const LESSON_SKILLS: Record<string, { ja: string; "zh-Hant": string; en: string 
   L18: { ja: "ウッテガエシ", "zh-Hant": "倒撲", en: "Snapback" },
   L19: { ja: "セメアイ", "zh-Hant": "對殺入門", en: "Liberty race" },
   L20: { ja: "入門卒業", "zh-Hant": "啟蒙畢業", en: "Graduation" },
+  L21: { ja: "引きシチョウ", "zh-Hant": "引征與改招", en: "Ladder-breakers" },
+  L22: { ja: "コウ争い", "zh-Hant": "劫材與劫爭", en: "Ko fight" },
+  L23: { ja: "眼作り", "zh-Hant": "做眼求活", en: "Making two eyes" },
+  L24: { ja: "眼つぶし", "zh-Hant": "點眼殺棋", en: "Killing eyes" },
+  L25: { ja: "セメアイの数え方", "zh-Hant": "對殺數氣進階", en: "Semeai counting" },
+  L26: { ja: "ヨセと地の計算", "zh-Hant": "官子與數地", en: "Endgame & counting" },
 };
 
 const BADGE_NAMES: Record<string, { ja: string; "zh-Hant": string; en: string }> = {
@@ -50,6 +56,12 @@ const BADGE_NAMES: Record<string, { ja: string; "zh-Hant": string; en: string }>
   snapback: { ja: "反転", "zh-Hant": "倒撲", en: "Snapback" },
   liberty_race: { ja: "気比べ", "zh-Hant": "氣的對殺", en: "Race" },
   graduation: { ja: "卒業", "zh-Hant": "西天門畢業", en: "Graduate" },
+  ladder_reader: { ja: "引きシチョウ", "zh-Hant": "引征識破", en: "Ladder reader" },
+  ko_fighter: { ja: "コウ戦士", "zh-Hant": "劫爭高手", en: "Ko fighter" },
+  two_eyes: { ja: "二眼", "zh-Hant": "兩眼做活", en: "Two eyes" },
+  eye_breaker: { ja: "眼つぶし", "zh-Hant": "點眼殺棋", en: "Eye breaker" },
+  liberty_counter: { ja: "気数え名人", "zh-Hant": "數氣名家", en: "Liberty counter" },
+  graduate_master: { ja: "凱旋卒業", "zh-Hant": "長安凱旋", en: "Graduate master" },
 };
 
 parent.get("/parent/summary", async (c) => {

@@ -1,12 +1,16 @@
 import type { AiConfig } from "../ai-config";
 import { EMPTY_AI_CONFIG } from "../ai-config";
+import { uid } from "../crypto";
 import type { CoachRequest, CoachResponse } from "./contract";
 import {
   buildFreeFirstSlots,
   freePriorityLabel,
   type FreeSlot,
 } from "./freeRotation";
+import { isOpen, loadBreakerState, recordFailure, recordSuccess, type BreakerState } from "./breaker";
+import { cacheGet, cachePut } from "./cache";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts";
+import type { ChatMessage, CoachProvider } from "./providers/types";
 import {
   createWorkersAiProvider,
   isWorkersAiQuotaError,
@@ -21,6 +25,7 @@ import {
   softMaxCalls,
   utcDay,
 } from "./quota";
+import { filterCoachOutput } from "./safety";
 import { staticCoach } from "./staticPhrases";
 
 export interface CoachEnv {
@@ -28,6 +33,7 @@ export interface CoachEnv {
   AI?: WorkersAiBinding;
   COACH_PROVIDER?: string;
   COACH_TIMEOUT_MS?: string;
+  COACH_TOTAL_DEADLINE_MS?: string;
   COACH_MAX_TOKENS?: string;
   COACH_TEMPERATURE?: string;
   COACH_CF_SOFT_MAX_CALLS?: string;
@@ -89,18 +95,24 @@ export function buildEffectiveEnv(env: CoachEnv, userCfg?: AiConfig | null): {
   return { env: merged, preferByok, forceNone, forceWorkersOnly, freeFirst };
 }
 
+/**
+ * Parse the model's JSON reply.
+ * v0.8.0: a parse failure returns null (treated as a provider failure) —
+ * raw model text is NEVER shipped to a child anymore.
+ */
 function parseJsonResponse(
   text: string,
   fallback: CoachResponse,
   source: CoachResponse["source"],
-): CoachResponse {
+): CoachResponse | null {
   try {
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
-    if (start < 0 || end < 0) return { ...fallback, say: text.slice(0, 160), source };
+    if (start < 0 || end < 0) return null;
     const obj = JSON.parse(text.slice(start, end + 1)) as Partial<CoachResponse>;
+    if (!obj.say || typeof obj.say !== "string") return null;
     return {
-      say: String(obj.say ?? fallback.say).slice(0, 500),
+      say: obj.say.slice(0, 500),
       tags: Array.isArray(obj.tags) ? obj.tags.map(String).slice(0, 8) : fallback.tags,
       praiseBehavior: obj.praiseBehavior ? String(obj.praiseBehavior).slice(0, 200) : undefined,
       parentNote: obj.parentNote ? String(obj.parentNote).slice(0, 300) : fallback.parentNote,
@@ -109,23 +121,34 @@ function parseJsonResponse(
       source,
     };
   } catch {
-    return { ...fallback, say: text.slice(0, 160), source };
+    return null;
   }
 }
 
+/**
+ * v0.8.0: real cancellation — AbortController aborts the losing fetch (the
+ * old Promise.race left it running, burning subrequest budget) and the timer
+ * is always cleared.
+ */
 async function completeWithTimeout(
   provider: { complete: CoachProvider["complete"] },
-  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  messages: ChatMessage[],
   maxTokens: number,
   temperature: number,
   timeoutMs: number,
 ): Promise<string> {
-  return Promise.race([
-    provider.complete(messages, { maxTokens, temperature }),
-    new Promise<string>((_, rej) =>
-      setTimeout(() => rej(new Error("coach timeout")), timeoutMs),
-    ),
-  ]);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(new Error("coach timeout")), timeoutMs);
+  try {
+    return await provider.complete(messages, {
+      maxTokens,
+      temperature,
+      signal: ac.signal,
+      json: true,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export type CoachStatus = {
@@ -209,29 +232,72 @@ export async function getCoachStatus(
   };
 }
 
+/** Fire-and-forget provider-failure telemetry into usage_events. */
+function logProviderFail(env: CoachEnv, slug: string, reason: string): void {
+  if (!env.DB) return;
+  env.DB.prepare(
+    `INSERT INTO usage_events (id, child_id, user_id, event_type, payload, created_at)
+     VALUES (?, NULL, NULL, 'coach_provider_fail', ?, ?)`,
+  )
+    .bind(uid(), JSON.stringify({ slug, reason: reason.slice(0, 120) }), Date.now())
+    .run()
+    .catch(() => undefined);
+}
+
+/** Fill the {{name}} placeholder in every child-facing field. */
+function fillName(res: CoachResponse, name: string): CoachResponse {
+  const n = name || "friend";
+  return {
+    ...res,
+    say: res.say.replaceAll("{{name}}", n),
+    praiseBehavior: res.praiseBehavior?.replaceAll("{{name}}", n),
+    parentNote: res.parentNote?.replaceAll("{{name}}", n),
+  };
+}
+
+type SlotOutcome = (CoachResponse & { via: string }) | null;
+
 async function trySlot(
+  env: CoachEnv,
+  breaker: BreakerState | null,
   slot: FreeSlot,
-  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  messages: ChatMessage[],
   maxTokens: number,
   temperature: number,
   timeoutMs: number,
   fallback: CoachResponse,
-): Promise<(CoachResponse & { via: string }) | null> {
+  locale: CoachRequest["locale"],
+): Promise<SlotOutcome> {
+  if (breaker && isOpen(breaker, slot.id)) return null;
   const provider = slot.build();
   if (!provider) return null;
   try {
     const text = await completeWithTimeout(provider, messages, maxTokens, temperature, timeoutMs);
     const source = slot.tier === "free" || slot.tier === "byok" ? "byok" : "workers_ai";
     const parsed = parseJsonResponse(text, fallback, source as CoachResponse["source"]);
-    return { ...parsed, via: slot.id };
-  } catch {
+    if (!parsed) {
+      logProviderFail(env, slot.id, "parse_failed");
+      if (env.DB && breaker) await recordFailure(env.DB, breaker, slot.id);
+      return null;
+    }
+    const safe = filterCoachOutput(parsed.say, locale);
+    if (!safe.ok) {
+      logProviderFail(env, slot.id, `safety_${safe.reason}`);
+      // Safety rejection is a content problem, not slot health — no breaker hit.
+      return null;
+    }
+    if (env.DB && breaker) await recordSuccess(env.DB, breaker, slot.id);
+    return { ...parsed, say: safe.text, via: slot.id };
+  } catch (e) {
+    logProviderFail(env, slot.id, String(e instanceof Error ? e.message : e));
+    if (env.DB && breaker) await recordFailure(env.DB, breaker, slot.id);
     return null;
   }
 }
 
 async function tryCloudflare(
   env: CoachEnv,
-  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  messages: ChatMessage[],
   maxTokens: number,
   temperature: number,
   timeoutMs: number,
@@ -239,7 +305,8 @@ async function tryCloudflare(
   day: string,
   maxCalls: number,
   quota: Awaited<ReturnType<typeof getQuota>> | null,
-): Promise<(CoachResponse & { via: string }) | null> {
+  locale: CoachRequest["locale"],
+): Promise<SlotOutcome> {
   if (!env.AI) return null;
   if (quota && shouldSkipWorkersAi(quota, maxCalls)) {
     if (env.DB) await bumpQuota(env.DB, day, "cf_blocked_soft").catch(() => undefined);
@@ -253,10 +320,20 @@ async function tryCloudflare(
     try {
       const provider = createWorkersAiProvider(env.AI, model);
       const text = await completeWithTimeout(provider, messages, maxTokens, temperature, timeoutMs);
-      if (env.DB) await bumpQuota(env.DB, day, "cf_success").catch(() => undefined);
       const parsed = parseJsonResponse(text, fallback, "workers_ai");
-      return { ...parsed, via: `cf:${model}` };
+      if (!parsed) {
+        logProviderFail(env, `cf:${model}`, "parse_failed");
+        continue;
+      }
+      const safe = filterCoachOutput(parsed.say, locale);
+      if (!safe.ok) {
+        logProviderFail(env, `cf:${model}`, `safety_${safe.reason}`);
+        continue;
+      }
+      if (env.DB) await bumpQuota(env.DB, day, "cf_success").catch(() => undefined);
+      return { ...parsed, say: safe.text, via: `cf:${model}` };
     } catch (e) {
+      logProviderFail(env, `cf:${model}`, String(e instanceof Error ? e.message : e));
       if (isWorkersAiQuotaError(e) && env.DB) {
         await bumpQuota(env.DB, day, "cf_fail_quota").catch(() => undefined);
         await setAlert(
@@ -292,16 +369,20 @@ export async function runCoach(
     env,
     userCfg,
   );
-  const fallback = staticCoach(req);
-  const timeoutMs = Number(effective.COACH_TIMEOUT_MS ?? 5000);
+  const fallback = staticCoach({ ...req, childName: "{{name}}" });
+  const perSlotMs = Number(effective.COACH_TIMEOUT_MS ?? 2500);
+  const totalDeadlineMs = Number(effective.COACH_TOTAL_DEADLINE_MS ?? 8000);
+  const startedAt = Date.now();
+  const remaining = () => Math.max(0, totalDeadlineMs - (Date.now() - startedAt));
+  const slotBudget = () => Math.min(perSlotMs, remaining());
   const maxTokens = Number(effective.COACH_MAX_TOKENS ?? 120);
   const temperature = Number(effective.COACH_TEMPERATURE ?? 0.5);
   const day = utcDay();
   const maxCalls = softMaxCalls(effective);
 
-  const messages = [
-    { role: "system" as const, content: buildSystemPrompt(req) },
-    { role: "user" as const, content: buildUserPrompt(req) },
+  const messages: ChatMessage[] = [
+    { role: "system", content: buildSystemPrompt(req) },
+    { role: "user", content: buildUserPrompt(req) },
   ];
 
   const chainLabel = forceNone
@@ -312,114 +393,104 @@ export async function runCoach(
         ? "free→cf→byok→static"
         : "cf→free→byok→static";
 
-  if (forceNone) {
+  const finishStatic = async (reminder?: string) => {
     if (env.DB) await bumpQuota(env.DB, day, "static_fallback").catch(() => undefined);
-    return { ...fallback, reminder: "static only", chain: chainLabel, via: "static" };
+    // staticCoach fills the real name itself
+    return { ...staticCoach(req), reminder, chain: chainLabel, via: "static" as const };
+  };
+
+  if (forceNone) return finishStatic("static only");
+
+  // —— cache (responses stored in {{name}}-placeholder form) ——
+  const cached = await cacheGet(req);
+  if (cached) {
+    return { ...fillName(cached, req.childName), chain: chainLabel, via: "cache" };
   }
 
   const quota = env.DB ? await getQuota(env.DB, day).catch(() => null) : null;
+  const breaker = env.DB ? await loadBreakerState(env.DB) : null;
   const slots = buildFreeFirstSlots(effective, userCfg, preferByok);
+
+  const finishHit = async (hit: CoachResponse & { via: string }) => {
+    await cachePut(req, hit); // placeholder form
+    const rem = env.DB
+      ? await getQuota(env.DB, day)
+          .then((q) => quotaStatusMessage(q, maxCalls, req.locale))
+          .catch(() => undefined)
+      : undefined;
+    return { ...fillName(hit, req.childName), reminder: rem, chain: chainLabel };
+  };
 
   const tryFreeSlots = async (onlyTier?: "free" | "byok") => {
     const list = onlyTier ? slots.filter((s) => s.tier === onlyTier) : slots;
     for (const slot of list) {
-      const hit = await trySlot(slot, messages, maxTokens, temperature, timeoutMs, fallback);
+      if (remaining() <= 200) return null; // total deadline nearly spent
+      const hit = await trySlot(
+        env,
+        breaker,
+        slot,
+        messages,
+        maxTokens,
+        temperature,
+        slotBudget(),
+        fallback,
+        req.locale,
+      );
       if (hit) {
         if (env.DB && slot.tier !== "cf") {
           await bumpQuota(env.DB, day, "byok_success").catch(() => undefined);
         }
-        const rem = env.DB
-          ? await getQuota(env.DB, day)
-              .then((q) => quotaStatusMessage(q, maxCalls, req.locale))
-              .catch(() => undefined)
-          : undefined;
-        return { ...hit, reminder: rem, chain: chainLabel };
+        return finishHit(hit);
       }
     }
     return null;
   };
 
-  // workers_ai only
-  if (forceWorkersOnly) {
+  const tryCf = async () => {
+    if (remaining() <= 200) return null;
     const cf = await tryCloudflare(
       effective,
       messages,
       maxTokens,
       temperature,
-      timeoutMs,
+      slotBudget(),
       fallback,
       day,
       maxCalls,
       quota,
+      req.locale,
     );
-    if (cf) return { ...cf, chain: chainLabel };
-    if (env.DB) await bumpQuota(env.DB, day, "static_fallback").catch(() => undefined);
-    return {
-      ...fallback,
-      reminder: quota ? quotaStatusMessage(quota, maxCalls, req.locale) : "cf only → static",
-      chain: chainLabel,
-      via: "static",
-    };
+    return cf ? finishHit(cf) : null;
+  };
+
+  // workers_ai only
+  if (forceWorkersOnly) {
+    const cf = await tryCf();
+    if (cf) return cf;
+    return finishStatic(
+      quota ? quotaStatusMessage(quota, maxCalls, req.locale) : "cf only → static",
+    );
   }
 
-  // —— free_first (default): high-perf free → CF soft → paid BYOK → static ——
   if (freeFirst) {
     // 1) free high-perf (Groq, OpenRouter free, Gemini free)
     const freeHit = await tryFreeSlots("free");
     if (freeHit) return freeHit;
-
     // 2) CF soft-capped
-    const cf = await tryCloudflare(
-      effective,
-      messages,
-      maxTokens,
-      temperature,
-      timeoutMs,
-      fallback,
-      day,
-      maxCalls,
-      quota,
-    );
-    if (cf) {
-      const rem =
-        env.DB && quota
-          ? quotaStatusMessage({ ...quota, cf_success: quota.cf_success + 1 }, maxCalls, req.locale)
-          : undefined;
-      return { ...cf, reminder: rem, chain: chainLabel };
-    }
-
+    const cf = await tryCf();
+    if (cf) return cf;
     // 3) user / env BYOK (may cost)
     const byokHit = await tryFreeSlots("byok");
     if (byokHit) return byokHit;
   } else {
     // legacy cf_first
-    const cf = await tryCloudflare(
-      effective,
-      messages,
-      maxTokens,
-      temperature,
-      timeoutMs,
-      fallback,
-      day,
-      maxCalls,
-      quota,
-    );
-    if (cf) {
-      const rem =
-        env.DB && quota
-          ? quotaStatusMessage({ ...quota, cf_success: quota.cf_success + 1 }, maxCalls, req.locale)
-          : undefined;
-      return { ...cf, reminder: rem, chain: chainLabel };
-    }
+    const cf = await tryCf();
+    if (cf) return cf;
     const any = await tryFreeSlots();
     if (any) return any;
   }
 
-  if (env.DB) await bumpQuota(env.DB, day, "static_fallback").catch(() => undefined);
-  return {
-    ...fallback,
-    reminder: quota ? quotaStatusMessage(quota, maxCalls, req.locale) : "static fallback",
-    chain: chainLabel,
-    via: "static",
-  };
+  return finishStatic(
+    quota ? quotaStatusMessage(quota, maxCalls, req.locale) : "static fallback",
+  );
 }

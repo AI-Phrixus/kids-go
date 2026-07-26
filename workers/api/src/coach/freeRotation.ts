@@ -9,7 +9,10 @@
  *  5. User BYOK (may be paid — only after free fail, or first if preferByok)
  *  6. Static phrases
  *
- * Hourly rotation: start index shifts so rate limits spread across providers.
+ * v0.8.0: hourly rotation removed — order is fixed by quality and the
+ * circuit breaker (coach/breaker.ts) skips unhealthy slots instead. Rotating
+ * by the clock meant a child got a 70B model some hours and a 9B model
+ * others, for no benefit.
  */
 
 import type { AiConfig } from "../ai-config";
@@ -59,17 +62,6 @@ export const GROQ_FREE_MODELS = [
   "gemma2-9b-it",
 ] as const;
 
-export function utcHour(): number {
-  return new Date().getUTCHours();
-}
-
-/** Rotate array start so different free providers get first try each hour. */
-export function rotateStart<T>(arr: T[], seed: number): T[] {
-  if (arr.length <= 1) return arr.slice();
-  const i = ((seed % arr.length) + arr.length) % arr.length;
-  return [...arr.slice(i), ...arr.slice(0, i)];
-}
-
 /**
  * Build ordered free-first provider slots.
  * @param preferByok — user wants their BYOK first (may leave free path)
@@ -85,13 +77,10 @@ export function buildFreeFirstSlots(
 
   // —— Free tier 1: Groq (best free for kids coach) ——
   if (env.GROQ_API_KEY) {
-    const models = rotateStart(
-      [
-        env.GROQ_MODEL || GROQ_FREE_MODELS[0],
-        ...GROQ_FREE_MODELS.filter((m) => m !== (env.GROQ_MODEL || GROQ_FREE_MODELS[0])),
-      ],
-      utcHour(),
-    );
+    const models = [
+      env.GROQ_MODEL || GROQ_FREE_MODELS[0],
+      ...GROQ_FREE_MODELS.filter((m) => m !== (env.GROQ_MODEL || GROQ_FREE_MODELS[0])),
+    ];
     models.forEach((model, i) => {
       free.push({
         id: `groq:${model}`,
@@ -122,7 +111,7 @@ export function buildFreeFirstSlots(
         // allow explicit secret override even if not :free
         m === preferred,
     );
-    const models = rotateStart(freeOnly, utcHour() + 3);
+    const models = freeOnly;
     models.forEach((model, i) => {
       free.push({
         id: `openrouter:${model}`,

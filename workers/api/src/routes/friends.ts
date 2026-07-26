@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { uid } from "../crypto";
 import { sanitizeNickname } from "../sanitize";
-import { loadSession } from "../session";
+import { rateOk } from "../middleware/rateLimit";
+import { requireChild } from "../middleware/guards";
+import { hasBlockedContent, hasContactInfo } from "../shared/blocklist";
 import type { Env } from "../types";
 
 const friends = new Hono<{ Bindings: Env }>();
@@ -10,21 +12,11 @@ const MAX_FRIENDS = 30;
 const MAX_MSG_LEN = 80;
 const MAX_MSGS_FETCH = 40;
 
-/** Best-effort rate limit per isolate */
-const hits = new Map<string, { n: number; t: number }>();
-function rateOk(key: string, max: number, windowMs = 60_000): boolean {
-  const now = Date.now();
-  const row = hits.get(key);
-  if (!row || now - row.t > windowMs) {
-    hits.set(key, { n: 1, t: now });
-    return true;
-  }
-  if (row.n >= max) return false;
-  row.n += 1;
-  return true;
-}
-
-/** Very light kid-safe filter (not comprehensive moderation). */
+/**
+ * Light kid-safe filter (not comprehensive moderation).
+ * v0.8.0: word/contact rules moved to shared/blocklist.ts so chat and the
+ * AI coach output filter can never drift apart.
+ */
 function sanitizeMessage(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   let s = raw.normalize("NFKC").trim();
@@ -33,25 +25,13 @@ function sanitizeMessage(raw: unknown): string | null {
   // collapse whitespace
   s = s.replace(/\s+/g, " ");
   if (!s || s.length > MAX_MSG_LEN) return null;
-  // block obvious URL spam except our own domain mention is ok as plain text
-  if (/https?:\/\//i.test(s) || /www\./i.test(s)) return null;
-  // crude blocklist (en/zh snippets)
-  const bad = /(色情|裸體|裸体|自殺|自杀|殺人|杀人|毒品|操你|傻逼|\bfuck\b|\bshit\b|\bbitch\b)/i;
-  if (bad.test(s)) return null;
+  if (hasContactInfo(s)) return null;
+  if (hasBlockedContent(s)) return null;
   return s;
 }
 
 function pair(a: string, b: string): { lo: string; hi: string } {
   return a < b ? { lo: a, hi: b } : { lo: b, hi: a };
-}
-
-async function requireChild(c: {
-  env: Env;
-  req: { header: (n: string) => string | undefined };
-}) {
-  const sess = await loadSession(c.env, c.req.header("Cookie"));
-  if (!sess?.child) return null;
-  return sess;
 }
 
 async function findChildByNickname(db: D1Database, nickname: string) {
@@ -82,9 +62,13 @@ friends.get("/friends", async (c) => {
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
   const me = sess.child.id;
 
+  // Single query with JOINs (v0.8.0 — was an N+1 loop of per-friend lookups)
   const rows = await c.env.DB.prepare(
-    `SELECT f.id, f.child_lo, f.child_hi, f.requested_by, f.status, f.created_at, f.accepted_at
+    `SELECT f.id, f.child_lo, f.child_hi, f.requested_by, f.status, f.created_at, f.accepted_at,
+            lo.nickname AS lo_nickname, hi.nickname AS hi_nickname
      FROM friendships f
+     LEFT JOIN children lo ON lo.id = f.child_lo
+     LEFT JOIN children hi ON hi.id = f.child_hi
      WHERE f.child_lo = ? OR f.child_hi = ?
      ORDER BY f.created_at DESC
      LIMIT 80`,
@@ -98,19 +82,15 @@ friends.get("/friends", async (c) => {
       status: string;
       created_at: number;
       accepted_at: number | null;
+      lo_nickname: string | null;
+      hi_nickname: string | null;
     }>();
 
   const list = rows.results ?? [];
-  const otherIds = list.map((r) => (r.child_lo === me ? r.child_hi : r.child_lo));
   const nickMap = new Map<string, string>();
-  if (otherIds.length) {
-    // D1 has no great IN bind; batch sequential for small N
-    for (const id of otherIds) {
-      const ch = await c.env.DB.prepare(`SELECT nickname FROM children WHERE id = ?`)
-        .bind(id)
-        .first<{ nickname: string }>();
-      if (ch) nickMap.set(id, ch.nickname);
-    }
+  for (const r of list) {
+    if (r.lo_nickname) nickMap.set(r.child_lo, r.lo_nickname);
+    if (r.hi_nickname) nickMap.set(r.child_hi, r.hi_nickname);
   }
 
   const accepted = [];
@@ -146,7 +126,7 @@ friends.post("/friends/add", async (c) => {
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
   if (!rateOk(`fadd:${sess.child.id}`, 15)) return c.json({ error: "rate_limited" }, 429);
 
-  const body = await c.req.json<{ nickname?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ nickname?: string }>().catch(() => ({}) as { nickname?: string });
   const nick = sanitizeNickname(body.nickname);
   if (!nick) return c.json({ error: "invalid_input" }, 400);
 
@@ -207,7 +187,8 @@ friends.post("/friends/add", async (c) => {
 friends.post("/friends/accept", async (c) => {
   const sess = await requireChild(c);
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
-  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}));
+  if (!rateOk(`facc:${sess.child.id}`, 15)) return c.json({ error: "rate_limited" }, 429);
+  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}) as { friendshipId?: string });
   const fid = String(body.friendshipId || "");
   if (!fid) return c.json({ error: "invalid_input" }, 400);
 
@@ -247,7 +228,8 @@ friends.post("/friends/accept", async (c) => {
 friends.post("/friends/remove", async (c) => {
   const sess = await requireChild(c);
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
-  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}));
+  if (!rateOk(`frem:${sess.child.id}`, 15)) return c.json({ error: "rate_limited" }, 429);
+  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}) as { friendshipId?: string });
   const fid = String(body.friendshipId || "");
   const me = sess.child.id;
   const row = await c.env.DB.prepare(
@@ -308,7 +290,7 @@ friends.post("/friends/messages", async (c) => {
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
   if (!rateOk(`fmsg:${sess.child.id}`, 30)) return c.json({ error: "rate_limited" }, 429);
 
-  const body = await c.req.json<{ friendshipId?: string; body?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ friendshipId?: string; body?: string }>().catch(() => ({}) as { friendshipId?: string; body?: string });
   const fid = String(body.friendshipId || "");
   const text = sanitizeMessage(body.body);
   if (!fid || !text) return c.json({ error: "invalid_message" }, 400);

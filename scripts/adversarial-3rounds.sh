@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-# Extreme adversarial test suite — 3 rounds
+# Extreme adversarial test suite — 3 rounds (red-team vs blue-team)
+# v0.8.0: defaults to LOCAL wrangler dev (was: production — every run used to
+# create throwaway accounts in the live D1). Pass a URL to target a preview:
+#   ./scripts/adversarial-3rounds.sh http://127.0.0.1:8787
 set -euo pipefail
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:$PATH"
-BASE="${1:-https://go.tdtc.indevs.in}"
+BASE="${1:-http://127.0.0.1:8787}"
+if [[ "$BASE" == *"go.tdtc"* ]]; then
+  echo "refusing to run against production ($BASE) — use a local/preview URL" >&2
+  exit 2
+fi
 PASS=0
 FAIL=0
 log() { echo "$*"; }
@@ -28,6 +35,11 @@ round_unauth() {
   done
   code=$(curl -sS -o /tmp/adv.json -w "%{http_code}" -X POST "$BASE/api/coach" -H 'Content-Type: application/json' -d '{"tone":"hint","locale":"en","childName":"x"}' || echo 000)
   expect_code 401 "$code" "POST coach"
+  code=$(curl -sS -o /tmp/adv.json -w "%{http_code}" "$BASE/api/coach/status" || echo 000)
+  expect_code 401 "$code" "GET coach/status (v0.8: quota behind login)"
+  # CORS allowlist: a foreign origin must NOT be reflected
+  acao=$(curl -sS -o /dev/null -D - -H "Origin: https://evil.example" "$BASE/api/health" | tr -d '\r' | grep -i '^access-control-allow-origin:' | cut -d' ' -f2 || true)
+  if [[ -z "$acao" || "$acao" == "null" ]]; then ok "CORS foreign origin not reflected"; else bad "CORS reflected '$acao'"; fi
   code=$(curl -sS -o /tmp/adv.json -w "%{http_code}" -X POST "$BASE/api/friends/add" -H 'Content-Type: application/json' -d '{"nickname":"x"}' || echo 000)
   expect_code 401 "$code" "POST friends/add"
   code=$(curl -sS -o /tmp/adv.json -w "%{http_code}" -X POST "$BASE/api/events" -H 'Content-Type: application/json' -d '{"event":"session_start"}' || echo 000)
@@ -172,9 +184,42 @@ round_auth_flow() {
     -d "{\"mode\":\"quick\",\"nickname\":\"$A\",\"pin\":\"0000\"}" >/dev/null
   expect_json_field /tmp/adv.json error auth_failed "wrong pin"
 
+  # v0.8: brute-force lockout — repeated failures must lock the account
+  for i in 2 3 4; do
+    curl -sS -o /tmp/adv.json -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
+      -d "{\"mode\":\"quick\",\"nickname\":\"$C\",\"pin\":\"0000\"}" >/dev/null
+  done
+  curl -sS -o /tmp/adv.json -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
+    -d "{\"mode\":\"quick\",\"nickname\":\"$C\",\"pin\":\"0000\"}" >/dev/null
+  expect_json_field /tmp/adv.json error account_locked "brute-force lockout kicks in"
+
+  # v0.8: changing AI settings without re-auth must fail
   curl -sS -c /tmp/advA -b /tmp/advA -o /tmp/adv.json -X PUT "$BASE/api/settings/ai" -H 'Content-Type: application/json' \
     -d '{"provider":"openai_compatible","baseUrl":"http://evil.com","apiKey":"sk"}' >/dev/null
+  expect_json_field /tmp/adv.json error credential_required "settings without sudo blocked"
+
+  curl -sS -c /tmp/advA -b /tmp/advA -o /tmp/adv.json -X PUT "$BASE/api/settings/ai" -H 'Content-Type: application/json' \
+    -d "{\"provider\":\"openai_compatible\",\"baseUrl\":\"http://evil.com\",\"apiKey\":\"sk\",\"credential\":\"$PIN\"}" >/dev/null
   expect_json_field /tmp/adv.json error base_url_must_https "http byok blocked"
+
+  curl -sS -c /tmp/advA -b /tmp/advA -o /tmp/adv.json -X PUT "$BASE/api/settings/ai" -H 'Content-Type: application/json' \
+    -d "{\"provider\":\"openai_compatible\",\"baseUrl\":\"https://192.168.1.1/v1\",\"apiKey\":\"sk\",\"credential\":\"$PIN\"}" >/dev/null
+  expect_json_field /tmp/adv.json error base_url_ip "SSRF private ip blocked"
+
+  curl -sS -c /tmp/advA -b /tmp/advA -o /tmp/adv.json -X PUT "$BASE/api/settings/ai" -H 'Content-Type: application/json' \
+    -d "{\"provider\":\"openai_compatible\",\"baseUrl\":\"https://localhost/v1\",\"apiKey\":\"sk\",\"credential\":\"$PIN\"}" >/dev/null
+  expect_json_field /tmp/adv.json error base_url_private "SSRF localhost blocked"
+
+  # v0.8: invalid progress status must be 400, not a 500
+  code=$(curl -sS -c /tmp/advA -b /tmp/advA -o /tmp/adv.json -w "%{http_code}" -X POST "$BASE/api/progress/L01" -H 'Content-Type: application/json' \
+    -d '{"status":"hacked","stars":3}' || echo 000)
+  expect_code 400 "$code" "invalid status → 400"
+
+  # v0.8: oversized moves payload rejected
+  bigmoves=$(python3 -c "print('[' + ','.join(['[4,4]']*6000) + ']')")
+  code=$(curl -sS -c /tmp/advA -b /tmp/advA -o /tmp/adv.json -w "%{http_code}" -X POST "$BASE/api/games" -H 'Content-Type: application/json' \
+    -d "{\"moves\":$bigmoves}" || echo 000)
+  expect_code 400 "$code" "oversized moves → 400"
 
   # remove friend then msg
   curl -sS -c /tmp/advA -b /tmp/advA -o /tmp/adv.json -X POST "$BASE/api/friends/remove" -H 'Content-Type: application/json' \

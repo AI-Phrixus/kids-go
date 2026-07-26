@@ -8,6 +8,8 @@ export interface CoachRequest {
   locale: Locale;
   childName: string;
   lessonId?: string;
+  /** Lesson skill tag (capture/ladder/ko/…) — picks the phrase bank (v0.8.0). */
+  skillTag?: string;
   boardSummary?: string;
   recentMoves?: unknown[];
   storyBeat?: string;

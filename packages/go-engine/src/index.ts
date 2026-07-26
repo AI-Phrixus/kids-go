@@ -1,6 +1,8 @@
 export * from "./types";
 export * from "./board";
 export * from "./ai";
+export * from "./eyes";
+export * from "./score";
 
 /** Capture-race helper for free play goals. If both ≥ target, higher score wins; tie → null. */
 export function captureRaceWinner(
