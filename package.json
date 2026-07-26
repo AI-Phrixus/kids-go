@@ -1,17 +1,24 @@
 {
   "name": "kids-go",
-  "version": "0.7.6",
+  "version": "0.8.0",
   "private": true,
   "description": "Kids Igo — children's Go learning game (Cloudflare Free)",
   "scripts": {
+    "sync-version": "node scripts/sync-version.mjs",
     "dev": "npm run build:web && wrangler dev",
     "dev:api": "wrangler dev",
     "dev:web": "vite --config apps/web/vite.config.ts",
+    "prebuild:web": "npm run sync-version",
     "build:web": "vite build --config apps/web/vite.config.ts",
+    "predeploy": "npm run sync-version",
     "deploy": "npm run build:web && wrangler deploy",
     "db:local": "wrangler d1 migrations apply kids-go --local",
     "db:remote": "wrangler d1 migrations apply kids-go --remote",
-    "test:engine": "npx --yes tsx packages/go-engine/src/engine.test.ts"
+    "typecheck": "tsc --noEmit -p packages/go-engine/tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p workers/api/tsconfig.json",
+    "test": "npm run test:engine && npm run validate:lessons && npm run check:locales",
+    "test:engine": "npx --yes tsx packages/go-engine/src/engine.test.ts",
+    "validate:lessons": "npx --yes tsx scripts/validate-lessons.ts",
+    "check:locales": "npx --yes tsx scripts/check-locales.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250705.0",
