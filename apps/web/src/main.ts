@@ -551,6 +551,9 @@ function cloneBoard(b: BoardState): BoardState {
     toPlay: b.toPlay,
     captured: { black: b.captured.black, white: b.captured.white },
     ko: b.ko,
+    consecutivePasses: b.consecutivePasses ?? 0,
+    moveNumber: b.moveNumber ?? 0,
+    history: b.history ? [...b.history] : [],
   };
 }
 
