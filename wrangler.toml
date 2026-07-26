@@ -1,0 +1,44 @@
+name = "kids-go"
+main = "workers/api/src/entry.ts"
+compatibility_date = "2025-07-05"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kids-go"
+database_id = "35d8acbd-2abd-4a68-b62e-88dfa1f0fd0d"
+migrations_dir = "migrations"
+
+[ai]
+binding = "AI"
+
+[assets]
+directory = "./apps/web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# Ensure security headers / SW path go through Worker entry
+run_worker_first = true
+
+# Primary human URL (verified live). Extra routes kept as backup.
+[[routes]]
+pattern = "go.tdtc.indevs.in/*"
+zone_name = "tdtc.indevs.in"
+
+[[routes]]
+pattern = "go.tdtc.dpdns.org/*"
+zone_name = "tdtc.dpdns.org"
+
+[[routes]]
+pattern = "igo.142857.eu.cc/*"
+zone_name = "142857.eu.cc"
+
+[vars]
+COACH_PROVIDER = "auto"
+COACH_TIMEOUT_MS = "5000"
+COACH_CF_SOFT_MAX_CALLS = "40"
+# Free tier: low-latency CF model (falls back to 3b on error)
+COACH_CF_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
+# free_first (default): Groq → OpenRouter free → Gemini free → CF soft → BYOK → static
+# cf_first: old order (CF soft first)
+COACH_CHAIN_MODE = "free_first"
+# Optional free-tier secrets: wrangler secret put GROQ_API_KEY / OPENROUTER_API_KEY / GOOGLE_API_KEY
