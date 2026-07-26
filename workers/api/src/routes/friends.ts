@@ -3,6 +3,7 @@ import { uid } from "../crypto";
 import { sanitizeNickname } from "../sanitize";
 import { rateOk } from "../middleware/rateLimit";
 import { requireChild } from "../middleware/guards";
+import { hasBlockedContent, hasContactInfo } from "../shared/blocklist";
 import type { Env } from "../types";
 
 const friends = new Hono<{ Bindings: Env }>();
@@ -11,7 +12,11 @@ const MAX_FRIENDS = 30;
 const MAX_MSG_LEN = 80;
 const MAX_MSGS_FETCH = 40;
 
-/** Very light kid-safe filter (not comprehensive moderation). */
+/**
+ * Light kid-safe filter (not comprehensive moderation).
+ * v0.8.0: word/contact rules moved to shared/blocklist.ts so chat and the
+ * AI coach output filter can never drift apart.
+ */
 function sanitizeMessage(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   let s = raw.normalize("NFKC").trim();
@@ -20,11 +25,8 @@ function sanitizeMessage(raw: unknown): string | null {
   // collapse whitespace
   s = s.replace(/\s+/g, " ");
   if (!s || s.length > MAX_MSG_LEN) return null;
-  // block obvious URL spam except our own domain mention is ok as plain text
-  if (/https?:\/\//i.test(s) || /www\./i.test(s)) return null;
-  // crude blocklist (en/zh snippets)
-  const bad = /(色情|裸體|裸体|自殺|自杀|殺人|杀人|毒品|操你|傻逼|\bfuck\b|\bshit\b|\bbitch\b)/i;
-  if (bad.test(s)) return null;
+  if (hasContactInfo(s)) return null;
+  if (hasBlockedContent(s)) return null;
   return s;
 }
 

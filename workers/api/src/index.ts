@@ -120,6 +120,7 @@ app.post("/api/coach", async (c) => {
     locale,
     childName,
     lessonId: typeof body.lessonId === "string" ? body.lessonId.slice(0, 8) : undefined,
+    skillTag: typeof body.skillTag === "string" ? body.skillTag.slice(0, 24) : undefined,
     boardSummary:
       typeof body.boardSummary === "string" ? body.boardSummary.slice(0, 400) : undefined,
     recentMoves: sanitizeRecentMoves(body.recentMoves),

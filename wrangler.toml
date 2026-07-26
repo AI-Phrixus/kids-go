@@ -34,7 +34,8 @@ zone_name = "142857.eu.cc"
 
 [vars]
 COACH_PROVIDER = "auto"
-COACH_TIMEOUT_MS = "5000"
+COACH_TIMEOUT_MS = "2500"
+COACH_TOTAL_DEADLINE_MS = "8000"
 COACH_CF_SOFT_MAX_CALLS = "40"
 # Free tier: low-latency CF model (falls back to 3b on error)
 COACH_CF_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
