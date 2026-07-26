@@ -126,7 +126,7 @@ friends.post("/friends/add", async (c) => {
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
   if (!rateOk(`fadd:${sess.child.id}`, 15)) return c.json({ error: "rate_limited" }, 429);
 
-  const body = await c.req.json<{ nickname?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ nickname?: string }>().catch(() => ({}) as { nickname?: string });
   const nick = sanitizeNickname(body.nickname);
   if (!nick) return c.json({ error: "invalid_input" }, 400);
 
@@ -188,7 +188,7 @@ friends.post("/friends/accept", async (c) => {
   const sess = await requireChild(c);
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
   if (!rateOk(`facc:${sess.child.id}`, 15)) return c.json({ error: "rate_limited" }, 429);
-  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}) as { friendshipId?: string });
   const fid = String(body.friendshipId || "");
   if (!fid) return c.json({ error: "invalid_input" }, 400);
 
@@ -229,7 +229,7 @@ friends.post("/friends/remove", async (c) => {
   const sess = await requireChild(c);
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
   if (!rateOk(`frem:${sess.child.id}`, 15)) return c.json({ error: "rate_limited" }, 429);
-  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}) as { friendshipId?: string });
   const fid = String(body.friendshipId || "");
   const me = sess.child.id;
   const row = await c.env.DB.prepare(
@@ -290,7 +290,7 @@ friends.post("/friends/messages", async (c) => {
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
   if (!rateOk(`fmsg:${sess.child.id}`, 30)) return c.json({ error: "rate_limited" }, 429);
 
-  const body = await c.req.json<{ friendshipId?: string; body?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ friendshipId?: string; body?: string }>().catch(() => ({}) as { friendshipId?: string; body?: string });
   const fid = String(body.friendshipId || "");
   const text = sanitizeMessage(body.body);
   if (!fid || !text) return c.json({ error: "invalid_message" }, 400);
