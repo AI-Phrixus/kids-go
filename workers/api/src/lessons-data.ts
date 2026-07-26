@@ -23,10 +23,42 @@ export type LessonStep =
   | { type: "tap"; prompt: { ja: string; "zh-Hant": string; en: string }; correct: [number, number][] }
   | { type: "info"; text: { ja: string; "zh-Hant": string; en: string } };
 
+export type Pt = { x: number; y: number };
+
+/** v0.8.0: optional completion gates — place_n lessons used to pass by just
+ *  placing N stones anywhere. */
+export type GoalPredicate =
+  | { type: "connected"; points: Pt[] }
+  | { type: "occupy"; points: Pt[]; anyOf?: number }
+  | { type: "two_eyes"; group: Pt }
+  | { type: "group_captured"; points: Pt[] }
+  | { type: "capture_at_least"; n: number }
+  | { type: "territory_lead"; margin?: number; komi?: number }
+  | { type: "all"; of: GoalPredicate[] };
+
+/** v0.8.0: scripted multi-move exchanges — ladders, ko fights and snapbacks
+ *  cannot be expressed as a single tap. */
+export type SequenceStep = {
+  expect: Pt[] | "any-capture" | "any-atari" | "pass";
+  reply?: Pt | "pass" | "ai";
+  hint?: { ja: string; "zh-Hant": string; en: string };
+  sayKey?: string;
+};
+
+export type BattleBase = {
+  aiLevel: 0 | 1 | 2;
+  setup?: SetupStone[];
+  playerColor?: "black" | "white";
+  goal?: GoalPredicate;
+  /** move budget used by the 3-star rating */
+  par?: number;
+};
+
 export type BattleSpec =
-  | { mode: "place_n"; n: number; aiLevel: 0 | 1 | 2; setup?: SetupStone[] }
-  | { mode: "find_atari"; points: [number, number][]; aiLevel: 0; setup?: SetupStone[] }
-  | { mode: "capture_n"; n: number; aiLevel: 0 | 1 | 2; setup?: SetupStone[] };
+  | (BattleBase & { mode: "place_n"; n: number })
+  | (BattleBase & { mode: "find_atari"; points: [number, number][] })
+  | (BattleBase & { mode: "capture_n"; n: number })
+  | (BattleBase & { mode: "sequence"; script: SequenceStep[]; afterScript?: "won" | "free-to-goal" });
 
 export type SetupStone = { x: number; y: number; color: "black" | "white" };
 
@@ -222,8 +254,11 @@ export const LESSONS: LessonMeta[] = [
     goal: T.story("練習逃跑：點出逃生的一手，再下幾手", "逃げの一手をタッチしてから対局", "Tap the escape move, then play"),
     battle: {
       mode: "place_n",
-      n: 6,
-      aiLevel: 0,
+      n: 4,
+      aiLevel: 1,
+      par: 6,
+      // v0.8.0 goal: the atari group must actually be saved (escape at 4,5)
+      goal: { type: "connected", points: [{ x: 4, y: 4 }, { x: 4, y: 5 }] },
       setup: [
         { x: 4, y: 4, color: "black" },
         { x: 3, y: 4, color: "white" },
@@ -300,8 +335,11 @@ export const LESSONS: LessonMeta[] = [
     goal: T.story("點出能把兩顆黑子連起來的點，再練習幾手", "つなぐ点をタッチしてから対局", "Tap the connecting point, then play"),
     battle: {
       mode: "place_n",
-      n: 8,
-      aiLevel: 0,
+      n: 4,
+      aiLevel: 1,
+      par: 6,
+      // v0.8.0 goal: the two black stones must end up in ONE group
+      goal: { type: "connected", points: [{ x: 2, y: 4 }, { x: 4, y: 4 }] },
       setup: [
         { x: 2, y: 4, color: "black" },
         { x: 4, y: 4, color: "black" },
@@ -338,16 +376,31 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、一手で二つのアタリ！",
       "{{name}}, one move, two ataris — double threat!",
     ),
-    goal: T.story("吃掉 1 子，感受「效率」", "1子取って効率を感じる", "Capture 1 stone efficiently"),
+    goal: T.story("下出雙叫吃，再吃掉一邊", "両アタリを打って片方を取る", "Play the double atari, then capture one side"),
     battle: {
-      mode: "capture_n",
-      n: 1,
-      aiLevel: 0,
+      // v0.8.0: a genuine double-atari shape — one move puts BOTH white
+      // stones in atari; white saves one side, you take the other.
+      mode: "sequence",
+      aiLevel: 1,
+      par: 3,
       setup: [
-        { x: 5, y: 5, color: "white" },
-        { x: 4, y: 5, color: "black" },
-        { x: 6, y: 5, color: "black" },
-        { x: 5, y: 4, color: "black" },
+        { x: 3, y: 4, color: "white" },
+        { x: 5, y: 4, color: "white" },
+        { x: 2, y: 4, color: "black" },
+        { x: 3, y: 3, color: "black" },
+        { x: 6, y: 4, color: "black" },
+        { x: 5, y: 3, color: "black" },
+      ],
+      script: [
+        {
+          expect: [{ x: 4, y: 4 }],
+          reply: { x: 3, y: 5 },
+          hint: T.story("找一個同時碰到兩顆白子的點！", "二つの白に同時に当たる点！", "Find the point touching BOTH white stones!"),
+        },
+        {
+          expect: "any-capture",
+          hint: T.story("白救了左邊——右邊那顆只剩一口氣！", "左を助けた——右は残り1気！", "White saved the left — the right one has 1 liberty!"),
+        },
       ],
     },
     steps: [
@@ -380,8 +433,11 @@ export const LESSONS: LessonMeta[] = [
     goal: T.story("點出切斷白棋連接的點，再練習", "切断点をタッチしてから対局", "Tap the cutting point, then play"),
     battle: {
       mode: "place_n",
-      n: 8,
-      aiLevel: 0,
+      n: 4,
+      aiLevel: 1,
+      par: 6,
+      // v0.8.0 goal: the cutting point must actually be taken
+      goal: { type: "occupy", points: [{ x: 4, y: 3 }] },
       setup: [
         { x: 3, y: 3, color: "white" },
         { x: 5, y: 3, color: "white" },
@@ -416,8 +472,28 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、生きるには眼。本物の眼が大事。",
       "{{name}}, life needs eyes. True eyes live; false eyes break.",
     ),
-    goal: T.story("認識眼的概念後，下滿 8 手感受空間", "眼を知って8手", "Learn eyes, then play 8 moves"),
-    battle: { mode: "place_n", n: 8, aiLevel: 0 },
+    goal: T.story("補上關鍵一手，做出兩隻真眼", "急所に打って二眼を作る", "Play the key point to make two real eyes"),
+    battle: {
+      // v0.8.0: a real life exercise — the group must end with two true eyes
+      mode: "place_n",
+      n: 1,
+      aiLevel: 1,
+      par: 3,
+      goal: { type: "two_eyes", group: { x: 1, y: 0 } },
+      setup: [
+        { x: 1, y: 0, color: "black" },
+        { x: 0, y: 1, color: "black" },
+        { x: 1, y: 1, color: "black" },
+        { x: 2, y: 1, color: "black" },
+        { x: 3, y: 1, color: "black" },
+        { x: 4, y: 0, color: "white" },
+        { x: 4, y: 1, color: "white" },
+        { x: 0, y: 2, color: "white" },
+        { x: 1, y: 2, color: "white" },
+        { x: 2, y: 2, color: "white" },
+        { x: 3, y: 2, color: "white" },
+      ],
+    },
     steps: [
       { type: "story" },
       info(
@@ -430,11 +506,7 @@ export const LESSONS: LessonMeta[] = [
         "仮眼は壊されやすい。",
         "False eyes can be destroyed — surround firmly.",
       ),
-      info(
-        "兒童階段先建立「別把自己堵死、留氣口」的感覺即可。",
-        "まず窒息しない形を。",
-        "For kids: don’t smother your own stones; leave breathing room.",
-      ),
+      tap("黑棋已有一隻眼（左下角）。點 (3,0)，做出第二隻眼！", "(3,0)で二つ目の眼！", "Tap (3,0) to make the second eye!", [[3, 0]]),
     ],
   },
   {
@@ -453,8 +525,15 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、口訣：**角が金、辺が銀、中央は草**！まず角から。",
       "{{name}}, proverb: **Golden corner, silver side, grassy center**! Corners first, then sides, center last.",
     ),
-    goal: T.story("學會角＞邊＞中，並在對局中優先佔角", "角優先で10手", "Prefer corners for 10 moves"),
-    battle: { mode: "place_n", n: 10, aiLevel: 0 },
+    goal: T.story("佔到 3 個「金角」附近的點", "金の角を3つ取る", "Occupy 3 golden-corner points"),
+    battle: {
+      mode: "place_n",
+      n: 8,
+      aiLevel: 1,
+      par: 12,
+      // v0.8.0 goal: at least 3 stones on corner-area points
+      goal: { type: "occupy", points: CORNERS.map(([x, y]) => ({ x, y })), anyOf: 3 },
+    },
     steps: [
       { type: "story" },
       info(
@@ -489,11 +568,14 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、角の次は辺。中央より辺！",
       "{{name}}, after corners, grow on the sides — better than the center!",
     ),
-    goal: T.story("優先在邊與角附近下棋 10 手", "辺・角を意識して10手", "Play 10 moves favoring side/corner"),
+    goal: T.story("佔到 3 個「銀邊」的點", "銀の辺を3つ取る", "Occupy 3 silver-side points"),
     battle: {
       mode: "place_n",
-      n: 10,
-      aiLevel: 0,
+      n: 8,
+      aiLevel: 1,
+      par: 12,
+      // v0.8.0 goal: at least 3 stones on side points
+      goal: { type: "occupy", points: SIDES.map(([x, y]) => ({ x, y })), anyOf: 3 },
       setup: [
         { x: 2, y: 2, color: "black" },
         { x: 6, y: 6, color: "white" },
@@ -531,6 +613,7 @@ export const LESSONS: LessonMeta[] = [
       mode: "capture_n",
       n: 2,
       aiLevel: 0,
+      par: 4,
       setup: [
         { x: 2, y: 2, color: "white" },
         { x: 1, y: 2, color: "black" },
@@ -569,11 +652,12 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、門食べ＝袋小路に追い込んで取る！",
       "{{name}}, gate capture: drive them into a pocket, then shut the gate!",
     ),
-    goal: T.story("完成吃子：點關門的一手，再吃掉白子", "門を閉めて取る", "Shut the gate and capture"),
+    goal: T.story("先關門，再提子", "門を閉めてから取る", "Shut the gate, then capture"),
     battle: {
-      mode: "capture_n",
-      n: 1,
-      aiLevel: 0,
+      // v0.8.0: two-move sequence — close the gate, then take the stone
+      mode: "sequence",
+      aiLevel: 1,
+      par: 3,
       setup: [
         // white in a "corridor" — classic simplified net
         { x: 4, y: 2, color: "white" },
@@ -583,8 +667,18 @@ export const LESSONS: LessonMeta[] = [
         { x: 5, y: 3, color: "black" },
         { x: 3, y: 1, color: "black" },
         { x: 5, y: 1, color: "black" },
-        // white liberty path toward 4,3 and 4,1 — black to play 4,3 or capture setup
         { x: 4, y: 0, color: "black" },
+      ],
+      script: [
+        {
+          expect: [{ x: 4, y: 3 }],
+          reply: "ai",
+          hint: T.story("先把門關上——堵住白子往下的路！", "まず門を閉めよう！", "Close the gate below the white stone first!"),
+        },
+        {
+          expect: "any-capture",
+          hint: T.story("門關上了，白只剩一口氣——提子！", "残り1気——取ろう！", "Gate shut — white has one liberty left. Capture!"),
+        },
       ],
     },
     steps: [
@@ -618,7 +712,8 @@ export const LESSONS: LessonMeta[] = [
     battle: {
       mode: "capture_n",
       n: 1,
-      aiLevel: 0,
+      aiLevel: 1,
+      par: 2,
       setup: [
         { x: 4, y: 4, color: "white" },
         { x: 3, y: 4, color: "black" },
@@ -649,19 +744,31 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、シチョウ＝追いかけて取る形！",
       "{{name}}, ladder: keep giving atari as they run — chase correctly to capture!",
     ),
-    goal: T.story("跟著征子方向追一程並完成吃子", "シチョウで取る", "Chase the ladder and capture"),
+    goal: T.story("沿對角線一路叫吃，把白子追到邊上吃掉", "斜めに追いつめて取る", "Chase white diagonally to the edge and capture"),
     battle: {
-      mode: "capture_n",
-      n: 1,
-      aiLevel: 0,
-      // Simplified ladder start: white will be chased; kids get a near-finished ladder capture
+      // v0.8.0: a REAL ladder — engine-verified 6-exchange chase to the edge.
+      mode: "sequence",
+      aiLevel: 1,
+      par: 8,
       setup: [
-        { x: 2, y: 2, color: "white" },
-        { x: 1, y: 2, color: "black" },
-        { x: 2, y: 1, color: "black" },
-        { x: 3, y: 1, color: "black" },
-        { x: 1, y: 3, color: "black" },
-        // white liberties limited; black to play 3,2 or 2,3 style chase
+        { x: 5, y: 5, color: "white" },
+        { x: 4, y: 5, color: "black" },
+        { x: 5, y: 4, color: "black" },
+        { x: 4, y: 6, color: "black" },
+      ],
+      script: [
+        { expect: [{ x: 6, y: 5 }], reply: { x: 5, y: 6 },
+          hint: T.story("從右邊叫吃，讓白只剩一口氣！", "右からアタリ！", "Atari from the right — one liberty left!") },
+        { expect: [{ x: 5, y: 7 }], reply: { x: 6, y: 6 },
+          hint: T.story("白往下逃了——從下面再叫吃！", "下からまたアタリ！", "White ran down — atari from below!") },
+        { expect: [{ x: 7, y: 6 }], reply: { x: 6, y: 7 },
+          hint: T.story("換右邊！保持只給白一口氣。", "また右から！", "Right side again — keep white at one liberty.") },
+        { expect: [{ x: 7, y: 7 }], reply: { x: 6, y: 8 },
+          hint: T.story("繼續斜著追！", "斜めに追う！", "Keep chasing diagonally!") },
+        { expect: [{ x: 7, y: 8 }], reply: { x: 5, y: 8 },
+          hint: T.story("白快到邊了——堵住右邊！", "端はもうすぐ！", "White is near the edge — block the right!") },
+        { expect: "any-capture",
+          hint: T.story("白已無路可逃——點最後一口氣，全部提子！", "最後の気をふさごう！", "No escape left — fill the last liberty and capture!") },
       ],
     },
     steps: [
@@ -672,11 +779,10 @@ export const LESSONS: LessonMeta[] = [
         "Ladder: atari → escape → atari again, chasing diagonally.",
       ),
       info(
-        "啟蒙重點：方向追對就吃得到；有對方「引征」子會失敗（進階再說）。",
-        "方向が大事。引きシチョウは後で。",
-        "Chase direction matters; ladder-breakers come later.",
+        "口訣：追的時候永遠讓對方「只剩一口氣」。",
+        "常に相手を1気にする。",
+        "Rule of thumb: keep the runner at exactly one liberty.",
       ),
-      tap("點 (3,2) 繼續追（簡化征子一手）！", "(3,2)で追おう！", "Tap (3,2) to continue the chase!", [[3, 2]]),
     ],
   },
   {
@@ -691,16 +797,27 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、コウ＝すぐ取り返すのは禁止！",
       "{{name}}, ko: no instant recapture — play elsewhere first (ko threat)!",
     ),
-    goal: T.story("認識劫：完成一盤吃子練習並記住「不能立刻提回」", "コウを知って取り練習", "Learn ko rule, then capture practice"),
+    goal: T.story("提劫、看白不能立刻提回、再把劫補牢", "コウを取り、埋めて固める", "Take the ko, see the rule, then fill it solid"),
     battle: {
-      mode: "capture_n",
-      n: 1,
-      aiLevel: 0,
+      // v0.8.0: a REAL ko shape (was a plain capture). Take the ko; white
+      // CANNOT retake immediately and plays elsewhere; then fill the ko.
+      mode: "sequence",
+      aiLevel: 1,
+      par: 3,
       setup: [
-        { x: 5, y: 5, color: "white" },
-        { x: 4, y: 5, color: "black" },
-        { x: 6, y: 5, color: "black" },
-        { x: 5, y: 4, color: "black" },
+        { x: 3, y: 3, color: "black" },
+        { x: 4, y: 2, color: "black" },
+        { x: 4, y: 4, color: "black" },
+        { x: 4, y: 3, color: "white" },
+        { x: 6, y: 3, color: "white" },
+        { x: 5, y: 2, color: "white" },
+        { x: 5, y: 4, color: "white" },
+      ],
+      script: [
+        { expect: [{ x: 5, y: 3 }], reply: { x: 0, y: 0 },
+          hint: T.story("提劫的點在白子唯一的氣上！", "コウを取る点は白の最後の気！", "Take the ko on white's last liberty!") },
+        { expect: [{ x: 4, y: 3 }],
+          hint: T.story("白不能立刻提回，去了別處——趁現在把劫「補牢」！", "白は取り返せない——今のうちに埋めよう！", "White couldn't retake and played elsewhere — fill the ko NOW!") },
       ],
     },
     steps: [
@@ -716,11 +833,10 @@ export const LESSONS: LessonMeta[] = [
         "Kid mnemonic: after a ko capture, play somewhere else first.",
       ),
       info(
-        "本關先用吃子複習；真正的打劫對殺以後再練。",
-        "まずは取りの復習。コウ戦は後で。",
-        "This stage reviews capture; full ko fights come later.",
+        "這一關試試看：你提劫 → 白只好去別處 → 你把劫填上，變成鐵壁！",
+        "取る→白はよそへ→埋めて固める！",
+        "Try it: take the ko → white must play elsewhere → fill it solid!",
       ),
-      tap("點 (5,6) 完成提子練習。", "(5,6)で取ろう。", "Tap (5,6) to capture.", [[5, 6]]),
     ],
   },
   {
@@ -735,16 +851,43 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、シチョウは二手追う。方向が命！",
       "{{name}}, ladder needs two chase moves — keep the atari direction!",
     ),
-    goal: T.story("完成征子追擊並提子", "シチョウで取る", "Chase ladder and capture"),
+    goal: T.story("十二段筋斗雲：把白子從中腹一路追到底線提光", "12手のシチョウで取り切る", "A 12-exchange ladder from center to the edge"),
     battle: {
-      mode: "capture_n",
-      n: 1,
-      aiLevel: 0,
+      // v0.8.0: the FULL engine-verified diagonal ladder across the board.
+      mode: "sequence",
+      aiLevel: 1,
+      par: 14,
       setup: [
-        { x: 1, y: 1, color: "white" },
-        { x: 0, y: 1, color: "black" },
-        { x: 1, y: 0, color: "black" },
-        { x: 2, y: 0, color: "black" },
+        { x: 2, y: 2, color: "white" },
+        { x: 1, y: 2, color: "black" },
+        { x: 2, y: 1, color: "black" },
+        { x: 1, y: 3, color: "black" },
+      ],
+      script: [
+        { expect: [{ x: 3, y: 2 }], reply: { x: 2, y: 3 },
+          hint: T.story("從右邊叫吃！", "右からアタリ！", "Atari from the right!") },
+        { expect: [{ x: 2, y: 4 }], reply: { x: 3, y: 3 },
+          hint: T.story("從下面堵住！讓白只剩一口氣。", "下からふさぐ！", "Block from below — one liberty!") },
+        { expect: [{ x: 4, y: 3 }], reply: { x: 3, y: 4 },
+          hint: T.story("再從右邊！", "また右！", "Right side again!") },
+        { expect: [{ x: 3, y: 5 }], reply: { x: 4, y: 4 },
+          hint: T.story("再從下面！之字形前進。", "また下！ジグザグ。", "Below again — zigzag!") },
+        { expect: [{ x: 5, y: 4 }], reply: { x: 4, y: 5 },
+          hint: T.story("右！", "右！", "Right!") },
+        { expect: [{ x: 4, y: 6 }], reply: { x: 5, y: 5 },
+          hint: T.story("下！", "下！", "Below!") },
+        { expect: [{ x: 6, y: 5 }], reply: { x: 5, y: 6 },
+          hint: T.story("右！", "右！", "Right!") },
+        { expect: [{ x: 5, y: 7 }], reply: { x: 6, y: 6 },
+          hint: T.story("下！", "下！", "Below!") },
+        { expect: [{ x: 7, y: 6 }], reply: { x: 6, y: 7 },
+          hint: T.story("右！", "右！", "Right!") },
+        { expect: [{ x: 7, y: 7 }], reply: { x: 6, y: 8 },
+          hint: T.story("白到底線了！", "端に到達！", "White hit the edge!") },
+        { expect: [{ x: 7, y: 8 }], reply: { x: 5, y: 8 },
+          hint: T.story("關右門！", "右をふさぐ！", "Shut the right door!") },
+        { expect: "any-capture",
+          hint: T.story("最後一口氣——全部提子！", "最後の気！全部取ろう！", "The last liberty — capture them all!") },
       ],
     },
     steps: [
@@ -754,13 +897,11 @@ export const LESSONS: LessonMeta[] = [
         "アタリ→逃げ→アタリ。",
         "Atari → escape → atari again.",
       ),
-      tap("第一步追：點 (2,1) 叫吃！", "第一步(2,1)！", "Step 1: atari at (2,1)!", [[2, 1]]),
-      tap("若白逃到 (2,2)，第二步點 (3,2) 繼續追（或直接吃到的點）。", "続けて追う。", "Step 2: keep chasing (e.g. 3,2).", [
-        [3, 2],
-        [2, 2],
-        [3, 1],
-        [1, 2],
-      ]),
+      info(
+        "之字形：右、下、右、下……方向對，白永遠只有一口氣。",
+        "ジグザグ：右・下・右・下……",
+        "Zigzag: right, below, right, below… white never gets a second liberty.",
+      ),
     ],
   },
   {
@@ -775,26 +916,43 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、取ったつもりが取られる！",
       "{{name}}, snapback: they think they capture you — you capture more!",
     ),
-    goal: T.story("完成吃子練習，體會反吃", "取りで反転を感じる", "Capture and feel the reversal"),
+    goal: T.story("先送一子進虎口，再一口氣反吃五子！", "一子を捨てて五子を取り返す！", "Sacrifice one stone, snap back five!"),
     battle: {
-      mode: "capture_n",
-      n: 1,
-      aiLevel: 0,
+      // v0.8.0: a REAL snapback (the old setup was byte-identical to L14's
+      // clamp). Requires the fixed ko rule — the recapture used to be illegal.
+      mode: "sequence",
+      aiLevel: 1,
+      par: 4,
       setup: [
-        { x: 4, y: 4, color: "white" },
-        { x: 3, y: 4, color: "black" },
-        { x: 5, y: 4, color: "black" },
-        { x: 4, y: 3, color: "black" },
+        { x: 0, y: 1, color: "white" },
+        { x: 1, y: 1, color: "white" },
+        { x: 2, y: 1, color: "white" },
+        { x: 2, y: 0, color: "white" },
+        { x: 0, y: 2, color: "black" },
+        { x: 1, y: 2, color: "black" },
+        { x: 2, y: 2, color: "black" },
+        { x: 3, y: 1, color: "black" },
+        { x: 3, y: 0, color: "black" },
+      ],
+      script: [
+        { expect: [{ x: 0, y: 0 }], reply: { x: 1, y: 0 },
+          hint: T.story("把一顆黑子「送」進白的眼裡（0,0）！", "白の眼に一子入れよう(0,0)！", "Throw one stone INTO white's eye at (0,0)!") },
+        { expect: "any-capture",
+          hint: T.story("白吃了你一子——但現在整塊白只剩一口氣！再點 (0,0)！", "白は取ったが残り1気！もう一度(0,0)！", "White captured your stone — but now the whole group has ONE liberty. Play (0,0) again!") },
       ],
     },
     steps: [
       { type: "story" },
       info(
-        "倒撲：有時「送一頭」再吃回更多。啟蒙先記：提子前要想一步。",
-        "取る前に一手読む。",
-        "Before capturing, read one more move — snapback ideas.",
+        "倒撲：故意送一子讓對方吃——吃完他反而只剩一口氣，你再全部提回！",
+        "捨て石→相手が取る→逆に全部取れる！",
+        "Sacrifice a stone; after they capture, THEY are left with one liberty!",
       ),
-      tap("點 (4,5) 提白。", "(4,5)で取ろう。", "Capture at (4,5).", [[4, 5]]),
+      info(
+        "提子前要想一步：吃了這子，我自己安全嗎？",
+        "取る前に一手読む。",
+        "Before capturing, always read one move ahead.",
+      ),
     ],
   },
   {
@@ -809,26 +967,37 @@ export const LESSONS: LessonMeta[] = [
       "{{name}}、気の数を比べよう！",
       "{{name}}, when both groups are in danger: compare liberties!",
     ),
-    goal: T.story("數氣並完成吃子", "気を数えて取る", "Count liberties and capture"),
+    goal: T.story("黑白各剩一口氣——先動手的贏！", "両方あと1気——先に打った方が勝ち！", "Both groups at one liberty — first to move wins!"),
     battle: {
+      // v0.8.0: a REAL capturing race — your corner pair is ALSO in atari;
+      // hesitate and white takes you first.
       mode: "capture_n",
-      n: 1,
-      aiLevel: 0,
+      n: 2,
+      aiLevel: 2,
+      par: 3,
+      goal: { type: "group_captured", points: [{ x: 0, y: 1 }, { x: 1, y: 1 }] },
       setup: [
-        { x: 3, y: 3, color: "white" },
-        { x: 2, y: 3, color: "black" },
-        { x: 4, y: 3, color: "black" },
-        { x: 3, y: 2, color: "black" },
+        { x: 0, y: 0, color: "black" },
+        { x: 1, y: 0, color: "black" },
+        { x: 0, y: 2, color: "black" },
+        { x: 1, y: 2, color: "black" },
+        { x: 0, y: 1, color: "white" },
+        { x: 1, y: 1, color: "white" },
       ],
     },
     steps: [
       { type: "story" },
       info(
-        "對殺：先數雙方氣。氣少的一方更危險。",
-        "気の少ない方が危ない。",
-        "Fewer liberties = more danger.",
+        "對殺：先數雙方氣。你的角上黑子幾口氣？白呢？",
+        "気を数えよう。黒は？白は？",
+        "Count liberties: your corner pair vs the white pair.",
       ),
-      tap("白只剩 1 氣，點 (3,4) 先吃掉！", "(3,4)で取ろう！", "Capture at (3,4)!", [[3, 4]]),
+      info(
+        "氣一樣多的時候——先動手的那方贏！",
+        "同じ数なら先に打った方の勝ち！",
+        "Equal liberties: whoever moves first wins!",
+      ),
+      tap("白的最後一口氣在 (2,1)——現在就下手！", "(2,1)が白の最後の気！", "White's last liberty is (2,1) — strike now!", [[2, 1]]),
     ],
   },
   {
@@ -847,7 +1016,8 @@ export const LESSONS: LessonMeta[] = [
     battle: {
       mode: "capture_n",
       n: 2,
-      aiLevel: 0,
+      aiLevel: 1,
+      par: 5,
       setup: [
         { x: 2, y: 2, color: "white" },
         { x: 1, y: 2, color: "black" },
@@ -867,6 +1037,335 @@ export const LESSONS: LessonMeta[] = [
         "Liberties, atari, capture, connect, corners, nets, ladder, ko.",
       ),
       tap("先吃第一子 (2,3)。", "まず(2,3)。", "First capture (2,3).", [[2, 3]]),
+    ],
+  },
+  /* ================= v0.8.0 — 取經歸途 L21–L26 ================= */
+  {
+    id: "L21",
+    boardSize: 9,
+    order: 21,
+    badgeId: "ladder_reader",
+    skillTag: T.title("引征與改招", "シチョウアタリと変化", "Ladder-breakers & switching plans"),
+    titles: T.title("通天河 · 老黿渡 · 引征", "通天河 · 引きシチョウ", "Tongtian River · Ladder-breaker"),
+    story: T.story(
+      "{{name}}，歸途第一站！老黿說：征子前先看路——路上有白的接應子（引征），追過去會反被咬！這時要改用關門。",
+      "{{name}}、帰り道の最初の駅！追う前に道を見る。敵の応援（シチョウアタリ）がいたら、門で取ろう！",
+      "{{name}}, first stop home! Before laddering, check the road — an enemy helper (ladder-breaker) means: switch to a net!",
+    ),
+    goal: T.story("看見引征子→放棄征子→改用關門吃", "応援を見たら門で取る", "See the breaker → skip the ladder → use the net"),
+    battle: {
+      // The distant white stone at (7,7) is a ladder-breaker: chasing from
+      // the corridor would eventually fail. The correct plan: shut the gate.
+      mode: "sequence",
+      aiLevel: 2,
+      par: 3,
+      setup: [
+        { x: 4, y: 2, color: "white" },
+        { x: 7, y: 7, color: "white" },
+        { x: 3, y: 2, color: "black" },
+        { x: 5, y: 2, color: "black" },
+        { x: 3, y: 1, color: "black" },
+        { x: 5, y: 1, color: "black" },
+        { x: 3, y: 3, color: "black" },
+        { x: 5, y: 3, color: "black" },
+        { x: 4, y: 0, color: "black" },
+      ],
+      script: [
+        { expect: [{ x: 4, y: 3 }], reply: "ai",
+          hint: T.story("遠處有白的接應——別追！關門的點在白子下方。", "応援がいる——追わずに門を閉めよう。", "A helper waits far away — don't chase! Shut the gate below.") },
+        { expect: "any-capture",
+          hint: T.story("門關上了——提子！", "門は閉じた——取ろう！", "Gate closed — capture!") },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "引征：征子路上如果有對方的子接應，追到那裡就會失敗。",
+        "シチョウの道に敵の石があると失敗する。",
+        "If an enemy stone waits on the ladder path, the chase fails.",
+      ),
+      tap("先用火眼金睛找出白的「接應子」——點它！", "応援の白石をタッチ！", "Spot the white ladder-breaker — tap it!", [[7, 7]]),
+      info(
+        "看到引征就改招：門吃、抱吃都是好選擇。",
+        "見つけたら作戦変更：門やゲタで取る。",
+        "Seen it? Switch plans: nets and clamps still work.",
+      ),
+    ],
+  },
+  {
+    id: "L22",
+    boardSize: 9,
+    order: 22,
+    badgeId: "ko_fighter",
+    skillTag: T.title("劫材與劫爭", "コウ材とコウ争い", "Ko threats & the ko fight"),
+    titles: T.title("火焰山回望 · 劫爭", "火焔山 · コウ争い", "Flaming Mountain · The ko fight"),
+    story: T.story(
+      "{{name}}，火焰山的火又冒出來了！這次是真正的劫爭：提劫、找劫材、應劫、再提回——比的是誰的劫材多！",
+      "{{name}}、今度は本物のコウ争い！コウ材を探して戦おう！",
+      "{{name}}, a REAL ko fight this time: take, threaten, answer, retake — whoever has more threats wins!",
+    ),
+    goal: T.story("打贏一場完整劫爭：提劫→應劫材→找劫材→再提→補劫", "コウ争いに勝つ", "Win a full ko fight"),
+    battle: {
+      mode: "sequence",
+      aiLevel: 2,
+      par: 7,
+      setup: [
+        { x: 3, y: 3, color: "black" },
+        { x: 4, y: 2, color: "black" },
+        { x: 4, y: 4, color: "black" },
+        { x: 4, y: 3, color: "white" },
+        { x: 6, y: 3, color: "white" },
+        { x: 5, y: 2, color: "white" },
+        { x: 5, y: 4, color: "white" },
+        { x: 0, y: 4, color: "black" },
+        { x: 1, y: 4, color: "black" },
+        { x: 0, y: 3, color: "white" },
+        { x: 1, y: 3, color: "white" },
+        { x: 2, y: 4, color: "white" },
+        { x: 7, y: 0, color: "white" },
+        { x: 8, y: 0, color: "white" },
+        { x: 7, y: 1, color: "black" },
+      ],
+      script: [
+        { expect: [{ x: 5, y: 3 }], reply: { x: 0, y: 5 },
+          hint: T.story("先提劫！白唯一的氣上。", "まずコウを取る！", "Take the ko first!") },
+        { expect: [{ x: 1, y: 5 }], reply: { x: 4, y: 3 },
+          hint: T.story("白在威脅你左邊的兩顆子（劫材）——先救它們！", "白の脅し（コウ材）に応えよう！", "White threatened your left pair (a ko threat) — answer it!") },
+        { expect: [{ x: 8, y: 1 }], reply: { x: 6, y: 0 },
+          hint: T.story("白提回劫了——輪到你找劫材！右上白兩子只剩兩口氣。", "今度は君のコウ材！右上の白！", "White retook the ko — YOUR turn to threaten! The white pair top-right.") },
+        { expect: [{ x: 5, y: 3 }], reply: "pass",
+          hint: T.story("白應了你的劫材——現在可以再提劫！", "白が応えた——もう一度コウを取れる！", "White answered your threat — retake the ko now!") },
+        { expect: [{ x: 4, y: 3 }],
+          hint: T.story("最後把劫填上，劫爭勝利！", "コウを埋めて勝ち！", "Fill the ko — the fight is won!") },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "劫爭流程：提劫 → 對方不能立刻提回 → 他下「劫材」逼你回應 → 他再提回 → 你也找劫材 → 你再提回。",
+        "コウの流れ：取る→相手はコウ材→取り返す→自分もコウ材→また取る。",
+        "The cycle: take → they threaten → they retake → you threaten → you retake.",
+      ),
+      info(
+        "劫材＝對方一定要回應的威脅。數數自己有幾個！",
+        "コウ材＝相手が必ず応える脅し。",
+        "A ko threat = a move the opponent MUST answer. Count yours!",
+      ),
+    ],
+  },
+  {
+    id: "L23",
+    boardSize: 9,
+    order: 23,
+    badgeId: "two_eyes",
+    skillTag: T.title("做眼求活", "眼を作って生きる", "Making two eyes (life)"),
+    titles: T.title("五莊觀 · 人參果 · 做眼", "五荘観 · 人参果 · 眼作り", "Ginseng Grove · Two eyes"),
+    story: T.story(
+      "{{name}}，五莊觀的人參果一顆保平安、兩顆保長生！棋也一樣：兩隻真眼，這塊棋就永遠吃不掉。",
+      "{{name}}、人参果は二つで長生き！石も真眼二つで永遠に取られない。",
+      "{{name}}, two ginseng fruits grant long life — and two real eyes make a group uncapturable!",
+    ),
+    goal: T.story("在白棋圍攻下做出兩隻真眼", "白に囲まれても二眼で生きる", "Make two real eyes under attack"),
+    battle: {
+      mode: "place_n",
+      n: 1,
+      aiLevel: 1,
+      par: 3,
+      goal: { type: "two_eyes", group: { x: 1, y: 0 } },
+      setup: [
+        { x: 1, y: 0, color: "black" },
+        { x: 0, y: 1, color: "black" },
+        { x: 1, y: 1, color: "black" },
+        { x: 2, y: 1, color: "black" },
+        { x: 3, y: 1, color: "black" },
+        { x: 4, y: 1, color: "black" },
+        { x: 5, y: 0, color: "white" },
+        { x: 5, y: 1, color: "white" },
+        { x: 0, y: 2, color: "white" },
+        { x: 1, y: 2, color: "white" },
+        { x: 2, y: 2, color: "white" },
+        { x: 3, y: 2, color: "white" },
+        { x: 4, y: 2, color: "white" },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "眼位要「分成兩間房」：一大間會被一手點破，兩小間才安全。",
+        "大きな一部屋より、二つの小部屋！",
+        "One big room can be invaded; TWO small rooms are safe.",
+      ),
+      info(
+        "看棋盤：黑棋左下已有一隻眼 (0,0)。眼位空間還剩 (2,0)(3,0)(4,0)。",
+        "左下に一眼あり。残りのスペースを見て。",
+        "You already have one eye at (0,0). Space remains at (2,0)(3,0)(4,0).",
+      ),
+      tap("在 (3,0) 隔出第二隻眼！", "(3,0)で二つ目の眼！", "Partition at (3,0) for the second eye!", [[3, 0]]),
+    ],
+  },
+  {
+    id: "L24",
+    boardSize: 9,
+    order: 24,
+    badgeId: "eye_breaker",
+    skillTag: T.title("點眼殺棋", "眼をつぶして取る", "Killing by destroying eyes"),
+    titles: T.title("白骨洞回顧 · 殺眼", "白骨洞 · 眼つぶし", "White-Bone Cave · Kill the eye"),
+    story: T.story(
+      "{{name}}，白骨精又變身了！這塊白棋看起來要活——用火眼金睛點進「要點」，讓它做不出第二隻眼！",
+      "{{name}}、白骨精の変身を見破れ！急所に打てば二眼はできない！",
+      "{{name}}, see through the disguise! Hit the vital point so white can never make a second eye!",
+    ),
+    goal: T.story("點入要點，殺死白棋全部提子", "急所に打って白を全部取る", "Play the vital point and capture the whole group"),
+    battle: {
+      mode: "sequence",
+      aiLevel: 1,
+      par: 8,
+      afterScript: "free-to-goal",
+      goal: { type: "group_captured", points: [{ x: 1, y: 0 }, { x: 1, y: 1 }] },
+      setup: [
+        { x: 1, y: 0, color: "white" },
+        { x: 0, y: 1, color: "white" },
+        { x: 1, y: 1, color: "white" },
+        { x: 2, y: 1, color: "white" },
+        { x: 3, y: 1, color: "white" },
+        { x: 0, y: 2, color: "black" },
+        { x: 1, y: 2, color: "black" },
+        { x: 2, y: 2, color: "black" },
+        { x: 3, y: 2, color: "black" },
+        { x: 4, y: 1, color: "black" },
+        { x: 4, y: 0, color: "black" },
+      ],
+      script: [
+        { expect: [{ x: 3, y: 0 }], reply: "ai",
+          hint: T.story("白想在 (2,0)(3,0) 做第二隻眼——點進要點 (3,0)！", "急所は(3,0)！", "White wants a second eye at (2,0)(3,0) — hit (3,0)!") },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "殺棋順序：①先數對方能做幾隻真眼 ②點進做眼的要點 ③外面收氣提光。",
+        "①眼を数える ②急所に打つ ③外から詰める。",
+        "Kill plan: count their eyes → hit the vital point → fill from outside.",
+      ),
+      info(
+        "白左下 (0,0) 已是真眼；右邊那間房是它最後的希望。",
+        "(0,0)は本物。右の部屋が最後の望み。",
+        "White's (0,0) eye is real; the right-side room is its last hope.",
+      ),
+    ],
+  },
+  {
+    id: "L25",
+    boardSize: 9,
+    order: 25,
+    badgeId: "liberty_counter",
+    skillTag: T.title("對殺數氣進階", "セメアイの数え方", "Semeai liberty counting"),
+    titles: T.title("流沙河 · 數沙 · 對殺", "流沙河 · 砂数え · セメアイ", "Flowing-Sand River · Count the race"),
+    story: T.story(
+      "{{name}}，沙悟淨數過流沙河的每一粒沙！對殺就是數氣比賽：先堵對方的「外氣」，一口都不能數錯！",
+      "{{name}}、悟浄は砂を全部数えた！セメアイは気の数え合い。外の気から詰めよう！",
+      "{{name}}, Wujing counted every sand grain! A capturing race is a counting contest — fill THEIR outside liberties first!",
+    ),
+    goal: T.story("兩塊棋纏鬥：數清楚氣，先提掉白棋", "気を数えて白を先に取る", "Count carefully and capture white first"),
+    battle: {
+      mode: "capture_n",
+      n: 2,
+      aiLevel: 2,
+      par: 4,
+      goal: { type: "group_captured", points: [{ x: 4, y: 4 }, { x: 4, y: 5 }] },
+      setup: [
+        { x: 4, y: 4, color: "white" },
+        { x: 4, y: 5, color: "white" },
+        { x: 5, y: 4, color: "black" },
+        { x: 5, y: 5, color: "black" },
+        { x: 4, y: 3, color: "black" },
+        { x: 3, y: 4, color: "black" },
+        { x: 5, y: 3, color: "white" },
+        { x: 6, y: 4, color: "white" },
+        // outer seal: the race area is closed — extending gains nothing
+        { x: 2, y: 5, color: "black" },
+        { x: 3, y: 6, color: "black" },
+        { x: 4, y: 7, color: "black" },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "先數：白的race棋（中央兩顆）幾口氣？你的呢？",
+        "まず数える：白は何気？黒は？",
+        "Count first: the white race pair vs YOUR race pair.",
+      ),
+      info(
+        "口訣：先堵對方外氣，自己的氣留到最後。",
+        "外の気から詰める。共有の気は最後。",
+        "Fill their OUTSIDE liberties first; save shared ones for last.",
+      ),
+      tap("白的外氣在 (3,5)——從這裡開始收！", "(3,5)から詰める！", "Start at white's outside liberty (3,5)!", [[3, 5]]),
+    ],
+  },
+  {
+    id: "L26",
+    boardSize: 9,
+    order: 26,
+    badgeId: "graduate_master",
+    skillTag: T.title("官子與數地（畢業）", "ヨセと地の計算（卒業）", "Endgame & counting (graduation)"),
+    titles: T.title("長安凱旋 · 數寶大典", "長安凱旋 · 宝数え", "Triumphant return · Counting the treasure"),
+    story: T.story(
+      "{{name}}，回到長安了！最後一課：把邊界關好（官子），然後兩人都 pass，一起數寶物（數地）——多一目也是贏！",
+      "{{name}}、長安に帰ってきた！最後はヨセ。境界を閉じて、パスして、宝（地）を数えよう！",
+      "{{name}}, back in Chang'an! Final lesson: close the borders, pass, and count the treasure — one point is enough to win!",
+    ),
+    goal: T.story("搶到更多邊界點，終局數地獲勝", "境界を多く取り、計算で勝つ", "Grab more boundary points and win on the count"),
+    battle: {
+      mode: "sequence",
+      aiLevel: 2,
+      par: 12,
+      afterScript: "free-to-goal",
+      goal: { type: "territory_lead", komi: 0 },
+      setup: [
+        { x: 3, y: 0, color: "black" },
+        { x: 3, y: 1, color: "black" },
+        { x: 3, y: 2, color: "black" },
+        { x: 3, y: 3, color: "black" },
+        { x: 3, y: 4, color: "black" },
+        { x: 3, y: 5, color: "black" },
+        { x: 3, y: 6, color: "black" },
+        { x: 3, y: 7, color: "black" },
+        { x: 3, y: 8, color: "black" },
+        { x: 5, y: 0, color: "white" },
+        { x: 5, y: 1, color: "white" },
+        { x: 5, y: 2, color: "white" },
+        { x: 5, y: 3, color: "white" },
+        { x: 5, y: 4, color: "white" },
+        { x: 5, y: 5, color: "white" },
+        { x: 5, y: 6, color: "white" },
+        { x: 5, y: 7, color: "white" },
+        { x: 5, y: 8, color: "white" },
+      ],
+      script: [
+        { expect: [{ x: 4, y: 0 }, { x: 4, y: 4 }, { x: 4, y: 8 }], reply: "ai",
+          hint: T.story("中間一排（x=4）誰下到就是誰的分——先搶！", "真ん中の列は早い者勝ち！", "The middle column scores for whoever fills it — grab it!") },
+        { expect: [{ x: 4, y: 0 }, { x: 4, y: 1 }, { x: 4, y: 2 }, { x: 4, y: 3 }, { x: 4, y: 4 }, { x: 4, y: 5 }, { x: 4, y: 6 }, { x: 4, y: 7 }, { x: 4, y: 8 }], reply: "ai",
+          hint: T.story("繼續搶邊界點！", "境界を取り続けよう！", "Keep taking boundary points!") },
+      ],
+    },
+    steps: [
+      { type: "story" },
+      info(
+        "數地（中國規則）：你的棋子＋你圍住的空點＝你的分數。",
+        "石＋囲った空点＝点数（中国ルール）。",
+        "Area counting: your stones + your surrounded points = your score.",
+      ),
+      info(
+        "官子：把邊界關好。每搶到一個邊界點，就多一分！",
+        "ヨセ＝境界を閉じる。1点ずつ積み上げ！",
+        "Endgame: close borders. Every boundary point you take is +1!",
+      ),
+      info(
+        "沒棋可下就 pass。兩人都 pass → 開始數寶物！",
+        "打つ所がなければパス。二人パスで計算！",
+        "Nothing left? Pass. Two passes → count the treasure!",
+      ),
     ],
   },
 ];

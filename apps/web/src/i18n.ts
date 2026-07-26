@@ -1,6 +1,6 @@
 export type Locale = "ja" | "zh-Hant" | "en";
 
-const dict: Record<Locale, Record<string, string>> = {
+export const dict: Record<Locale, Record<string, string>> = {
   ja: {
     thinking: "悟空が考え中…",
     score_title: "たからもの数え（地の計算）",

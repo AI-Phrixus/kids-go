@@ -4,6 +4,9 @@ import { sha256hex, uid } from "./crypto";
 const COOKIE = "kids_go_sid";
 const DAY = 86_400_000;
 
+/** crypto.randomUUID() shape — the only form a legacy plaintext session id took. */
+const LEGACY_TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * v0.8.0: session tokens are stored HASHED (sha256) in D1 — a database leak
  * no longer yields usable cookies. The raw token only ever lives in the
@@ -79,8 +82,12 @@ export async function loadSession(
 
   const hashed = await sha256hex(raw);
   let row = await env.DB.prepare(SESSION_SQL).bind(hashed).first<SessionRow>();
-  if (!row) {
-    // Legacy plaintext session (pre-0.8) — remove this fallback in 0.8.1.
+  if (!row && LEGACY_TOKEN_RE.test(raw)) {
+    // Legacy plaintext session (pre-0.8): those ids were crypto.randomUUID().
+    // Gating on the UUID shape is essential — otherwise an attacker who reads
+    // a v0.8 *hashed* id from the DB could replay it directly as a cookie
+    // (its raw form equals the stored row id). A 64-hex hash is not UUID-shaped,
+    // so this path can never resolve one. Remove the whole fallback in 0.8.1.
     row = await env.DB.prepare(SESSION_SQL).bind(raw).first<SessionRow>();
   }
 

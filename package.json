@@ -15,10 +15,11 @@
     "db:local": "wrangler d1 migrations apply kids-go --local",
     "db:remote": "wrangler d1 migrations apply kids-go --remote",
     "typecheck": "tsc --noEmit -p packages/go-engine/tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p workers/api/tsconfig.json",
-    "test": "npm run test:engine && npm run validate:lessons && npm run check:locales",
+    "test": "npm run test:engine && npm run validate:lessons && npm run check:locales && npm run test:adversarial",
     "test:engine": "npx --yes tsx packages/go-engine/src/engine.test.ts",
     "validate:lessons": "npx --yes tsx scripts/validate-lessons.ts",
-    "check:locales": "npx --yes tsx scripts/check-locales.ts"
+    "check:locales": "npx --yes tsx scripts/check-locales.ts",
+    "test:adversarial": "npx --yes tsx scripts/adversarial.test.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250705.0",
