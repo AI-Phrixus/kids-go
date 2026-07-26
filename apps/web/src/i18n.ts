@@ -3,8 +3,9 @@ export type Locale = "ja" | "zh-Hant" | "en";
 export const dict: Record<Locale, Record<string, string>> = {
   ja: {
     thinking: "悟空が考え中…",
-    score_title: "たからもの数え（地の計算）",
-    territory: "陣地",
+    score_title: "地を数える（日本ルール）",
+    territory: "地",
+    prisoners_lbl: "アゲハマ",
     stones_lbl: "石",
     dame: "ダメ",
     komi: "コミ",
@@ -154,8 +155,9 @@ export const dict: Record<Locale, Record<string, string>> = {
   },
   "zh-Hant": {
     thinking: "悟空思考中…",
-    score_title: "數寶物（數地）",
+    score_title: "數地（日本規則）",
     territory: "地",
+    prisoners_lbl: "提子",
     stones_lbl: "子",
     dame: "單官",
     komi: "貼目",
@@ -304,8 +306,9 @@ export const dict: Record<Locale, Record<string, string>> = {
   },
   en: {
     thinking: "Wukong is thinking…",
-    score_title: "Counting the treasure (scoring)",
+    score_title: "Counting territory (Japanese rules)",
     territory: "Territory",
+    prisoners_lbl: "Prisoners",
     stones_lbl: "Stones",
     dame: "Dame",
     komi: "Komi",

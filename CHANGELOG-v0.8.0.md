@@ -14,9 +14,13 @@
 - **教練解析失敗洩漏原始模型文字**：解析失敗一律回退句庫，永不輸出原始文字。
 - **版本號漂移**：`scripts/sync-version.mjs` 單一來源（web/worker/sw）。
 
+## 計分規則：日本規則（數目）
+
+面向日本小四孩子，計分採**日本規則（數目：地＋アゲハマ提子）**，符合日本圍棋文化與學校教育；「圍住空點＝地」也更貼近初學者建立全局／領地意識的認知路徑。引擎另保留中國規則（數子）為選項但非預設。L26 畢業課據此重寫成「補好邊界每個缺口再數目」的日本規則官子課（缺口會讓整片地漏成單官）。
+
 ## 引擎 v2（`packages/go-engine`，純客戶端）
 
-正確劫 + positional superko；中國規則數地 `score()`/`gameResult()`/`territoryMap()` + 貼目；`pass()`/`isGameOver()` 進 board.ts，`BoardState` 記 consecutivePasses/moveNumber/history；三檔真實分級 AI（L2 兩層搜尋，自對弈 L2>L1≈77%、L1>L0 100%，<50ms/手）；真眼偵測 + pass 策略；整數索引 flood fill；`play()` 回傳提子清單供動畫。**74 條斷言測試**（多子提、倒撲、劫負向、超劫、數地、對殺、自對弈勝率）。
+正確劫 + positional superko；日本規則數目 `score()`/`gameResult()`/`territoryMap()` + 貼目（`score(state, { rules })` 可切中國規則）；`pass()`/`isGameOver()` 進 board.ts，`BoardState` 記 consecutivePasses/moveNumber/history；三檔真實分級 AI（L2 兩層搜尋，自對弈 L2>L1≈77%、L1>L0 100%，<50ms/手）；真眼偵測 + pass 策略；整數索引 flood fill；`play()` 回傳提子清單供動畫。**74 條斷言測試**（多子提、倒撲、劫負向、超劫、數地、對殺、自對弈勝率）。
 
 ## 後端安全（`workers/api`）
 

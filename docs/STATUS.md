@@ -7,7 +7,7 @@
 
 **P0 修復**：護眼遮罩事件委派修復（非同步屏幕上可正常關閉）；引擎 ko 條件補上「提子自身入氣=1」（解鎖倒撲）；SW 快取鍵由版本生成 + HTML network-first（返回用戶能升級）；popstate 返回鍵；鍵盤焦點跨手保持；星數真實計算；休息倒數讀設定；教練解析失敗不再輸出原始模型文字；版本號單一來源（`scripts/sync-version.mjs`）。
 
-**引擎 v2**（`packages/go-engine`）：正確劫規則 + positional superko；`score()`/`gameResult()`/`territoryMap()`（中國規則數地 + 貼目）；`pass()`/`isGameOver()` 進 board.ts + BoardState 記 consecutivePasses/moveNumber/history；三檔真實分級 AI（L2 兩層搜尋，自對弈 L2>L1 ≈77%、L1>L0 100%）；真眼偵測（不填自己的眼）+ pass 策略；整數索引 flood fill；**74 條斷言測試**。
+**引擎 v2**（`packages/go-engine`）：正確劫規則 + positional superko；`score()`/`gameResult()`/`territoryMap()`（日本規則數目 + 貼目）；`pass()`/`isGameOver()` 進 board.ts + BoardState 記 consecutivePasses/moveNumber/history；三檔真實分級 AI（L2 兩層搜尋，自對弈 L2>L1 ≈77%、L1>L0 100%）；真眼偵測（不填自己的眼）+ pass 策略；整數索引 flood fill；**74 條斷言測試**。
 
 **後端安全**：CORS 白名單（取代反射任意 origin）；session **SHA-256 雜湊存儲** + 登入輪換（明文回退僅限 UUID 形狀，杜絕雜湊 id 重放）；PIN/密碼**失敗鎖定**（指數退避）；`/api/health` 靜態化（零 D1 寫入）；熱路徑移除 DDL；events/games/friends 補限流；`moves_json` 32KB 上限 + 欄位驗證；progress status 嚴格枚舉（不再 500）；BYOK **SSRF 防護** + 家長密碼/PIN 重新驗證；好友列表 N+1 改 JOIN；HSTS/object-src/frame-ancestors；`app.onError`；每日 cron 清理過期 session 與舊事件；遷移 0006–0008。
 

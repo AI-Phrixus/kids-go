@@ -255,12 +255,10 @@ assert(listLegalMoves(createEmptyBoard(9)).length === 81, "81 empties");
   assert(!isTrueEye(f, 0, 0, "black"), "false eye rejected");
 }
 
-/* ---------------- scoring ---------------- */
+/* ---------------- scoring (Japanese = territory + prisoners, default) ------- */
 {
-  // Vertical wall: black column x=4, black owns x<4? No — wall splits board:
-  // left region touches only black? Both sides touch black only… use two walls.
-  // Black wall x=3, white wall x=5 → x<3 black territory, x>5 white territory,
-  // x=4 column neutral (touches both).
+  // Black wall x=3, white wall x=5 → x<3 black territory (27), x>5 white (27),
+  // x=4 column neutral (touches both). Stones are NOT counted in Japanese rules.
   const setup: { x: number; y: number; c: Color }[] = [];
   for (let y = 0; y < 9; y++) {
     setup.push({ x: 3, y, c: "black" });
@@ -271,19 +269,38 @@ assert(listLegalMoves(createEmptyBoard(9)).length === 81, "81 empties");
   assert(map[idx(9, 0, 0)] === "black", "left is black territory");
   assert(map[idx(9, 8, 8)] === "white", "right is white territory");
   assert(map[idx(9, 4, 4)] === "neutral", "middle column neutral");
-  const s = score(b, 0);
-  assert(s.stones.black === 9 && s.stones.white === 9, "stone counts");
+  const s = score(b);
+  assert(s.rules === "japanese", "default rules = japanese");
   assert(s.territory.black === 27 && s.territory.white === 27, `territories 27/27, got ${s.territory.black}/${s.territory.white}`);
   assert(s.neutral === 9, "9 dame");
-  assert(s.black === 36 && s.white === 36, "area totals");
-  const draw = gameResult(b, 0);
+  assert(s.black === 27 && s.white === 27, "japanese totals = territory (stones not counted)");
+  const draw = gameResult(b);
   assert(draw.winner === "draw", "no komi → draw");
-  const withKomi = gameResult(b, 3.5);
-  assert(withKomi.winner === "white" && withKomi.margin === 3.5, "komi decides");
+  const withKomi = gameResult(b, 6.5);
+  assert(withKomi.winner === "white" && withKomi.margin === 6.5, "komi decides");
+  // Chinese (area) option still available for completeness
+  const area = score(b, { rules: "chinese" });
+  assert(area.black === 36 && area.white === 36, "chinese totals = stones + territory");
+}
+{
+  // Prisoners count in Japanese scoring: black captures a white stone.
+  const b = boardWith(
+    [
+      { x: 2, y: 2, c: "white" },
+      { x: 1, y: 2, c: "black" },
+      { x: 3, y: 2, c: "black" },
+      { x: 2, y: 1, c: "black" },
+    ],
+    "black",
+  );
+  const after = tryPlay(b, 2, 3);
+  const s = score(after!);
+  assert(s.prisoners.black === 1, "black prisoner counted");
+  assert(s.black >= 1, "prisoner adds to black's japanese score");
 }
 {
   // Empty board: single region touching nothing → neutral, drawn game.
-  const r = gameResult(createEmptyBoard(9), 0);
+  const r = gameResult(createEmptyBoard(9));
   assert(r.winner === "draw" && r.score.neutral === 81, "empty board neutral");
 }
 

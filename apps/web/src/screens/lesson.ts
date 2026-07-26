@@ -258,8 +258,8 @@ function scorePanelHtml(r: GameResult): string {
       <h3>${t(L, "score_title")}</h3>
       <table class="score-table">
         <tr><th></th><th>● </th><th>○ </th></tr>
-        <tr><td>${t(L, "stones_lbl")}</td><td>${s.stones.black}</td><td>${s.stones.white}</td></tr>
         <tr><td>${t(L, "territory")}</td><td>${s.territory.black}</td><td>${s.territory.white}</td></tr>
+        <tr><td>${t(L, "prisoners_lbl")}</td><td>${s.prisoners.black}</td><td>${s.prisoners.white}</td></tr>
         <tr><td>${t(L, "komi")}</td><td>—</td><td>${s.komi}</td></tr>
         <tr class="score-total"><td>=</td><td>${s.black}</td><td>${s.white}</td></tr>
       </table>

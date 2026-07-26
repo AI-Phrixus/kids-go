@@ -36,15 +36,25 @@ export type PlayResult =
       reason: "off-board" | "occupied" | "suicide" | "ko" | "superko" | "game-over";
     };
 
+export type ScoringRules = "japanese" | "chinese";
+
 export interface Score {
-  /** area totals: stones + territory (+ komi for white) */
+  /**
+   * Final points per side. Japanese (default): territory + prisoners (+komi
+   * for white). Chinese: stones-on-board + territory (+komi for white).
+   */
   black: number;
   white: number;
+  /** surrounded empty points (地) */
   territory: { black: number; white: number };
+  /** captured opponent stones (アゲハマ / prisoners) — Japanese counting */
+  prisoners: { black: number; white: number };
+  /** stones on the board (used by Chinese/area counting) */
   stones: { black: number; white: number };
-  /** dame: empty points bordering both colors */
+  /** dame: empty points bordering both colors (worth 0) */
   neutral: number;
   komi: number;
+  rules: ScoringRules;
 }
 
 export interface GameResult {
