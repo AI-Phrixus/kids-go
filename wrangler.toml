@@ -42,3 +42,10 @@ COACH_CF_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
 # cf_first: old order (CF soft first)
 COACH_CHAIN_MODE = "free_first"
 # Optional free-tier secrets: wrangler secret put GROQ_API_KEY / OPENROUTER_API_KEY / GOOGLE_API_KEY
+
+# v0.8.0: nightly maintenance (session purge + telemetry retention)
+[triggers]
+crons = ["0 3 * * *"]
+
+[observability]
+enabled = true

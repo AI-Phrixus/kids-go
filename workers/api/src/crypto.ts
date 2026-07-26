@@ -4,6 +4,15 @@ export function uid(): string {
   return crypto.randomUUID();
 }
 
+/** Hex SHA-256 — used to store session tokens hashed at rest. */
+export async function sha256hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", te.encode(input));
+  const bytes = new Uint8Array(digest);
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
+
 export async function hashPassword(password: string, saltB64?: string): Promise<string> {
   const salt = saltB64
     ? b64ToBytes(saltB64)

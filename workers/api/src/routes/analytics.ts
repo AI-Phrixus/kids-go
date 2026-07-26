@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { uid } from "../crypto";
+import { rateOk } from "../middleware/rateLimit";
 import { loadSession } from "../session";
 import type { Env } from "../types";
 
@@ -24,6 +25,8 @@ analytics.post("/events", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
   // Require login — block anonymous DB spam
   if (!sess?.user) return c.json({ error: "unauthorized" }, 401);
+  // v0.8.0: rate limit (was unlimited D1 writes per logged-in user)
+  if (!rateOk(`events:${sess.user.id}`, 60)) return c.json({ error: "rate_limited" }, 429);
   let body: { event?: string; payload?: unknown } = {};
   try {
     body = await c.req.json();
