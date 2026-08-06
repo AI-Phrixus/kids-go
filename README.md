@@ -8,12 +8,12 @@
 
 | | |
 |--|--|
-| **版本** | **v0.7.5** · L01–L20 · 吉卜力感奇幻 UI |
+| **版本** | **v0.7.7** · L01–L20 · 安全與穩定性修復 |
 | **線上** | **https://go.tdtc.indevs.in** · https://go.tdtc.dpdns.org · workers.dev |
 | **目標年齡** | 約 10–11 歲（小四 · 暑假→下學期） |
 | **UI 語言** | 日本語 · 繁體中文 · English |
 | **部署** | Cloudflare Workers Free + D1 Free（assets 一體） |
-| **教練 AI** | 免費高效優先：Groq → OpenRouter free → Gemini free → CF soft → 句庫 |
+| **教練 AI** | 隱私優先：CF soft → 已設定免費額／家長 BYOK → 句庫（外部不含孩子暱稱） |
 | **社交** | 暱稱互加好友 · 短訊聊天 · 邀請分享（無陌生人列表） |
 | **站內說明** | 完整九章「遊戲說明」目錄（三語） |
 | **倉庫** | https://github.com/AI-Phrixus/kids-go |
@@ -47,7 +47,7 @@
 Browser  →  go-engine + 棋盤 + 西遊 UI + 好友聊天 + 站內說明 + 休息鐘
        │ Cookie session
 Workers Free (Hono)  →  D1 用戶/進度/好友/訊息
-       └─ free_first 教練：Groq → OpenRouter free → Gemini free → CF soft → 句庫
+       └─ 隱私優先教練：CF soft → 已設定免費額／家長 BYOK → 去識別化請求 → 句庫
 ```
 
 詳見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
@@ -56,19 +56,19 @@ Workers Free (Hono)  →  D1 用戶/進度/好友/訊息
 
 ## 快速開始（本機）
 
-需要 Node 20+、pnpm（或 npm）。
+需要 Node 22+ 與 npm。
 
 ```bash
 git clone https://github.com/AI-Phrixus/kids-go.git
 cd kids-go
-cp .env.example .env
-npm install --legacy-peer-deps
-npm run build:web
-npx wrangler d1 migrations apply kids-go --local
-npx wrangler dev
+npm install
+npm run db:local
+npm run dev
 # 開啟 http://localhost:8787
-# 快速註冊暱稱+PIN → 西行地圖 → L01…
+# 快速註冊暱稱+6 位 PIN → 西行地圖 → L01…
 ```
+
+本機模式不會連外呼叫 AI，也不需要先登入 Cloudflare；教練會安全回退到內建句庫。
 
 部署見 [docs/DEPLOY.md](docs/DEPLOY.md)。需先 `npx wrangler login`。
 

@@ -37,10 +37,16 @@ export class EyeCareClock {
     return `kids-go-eye-ms-${this.dayKey}`;
   }
 
+  private breakStorageKey(): string {
+    return `kids-go-eye-break-ms-${this.dayKey}`;
+  }
+
   private loadToday(): void {
     this.dayKey = EyeCareClock.todayKey();
     const raw = localStorage.getItem(this.storageKey());
     this.activeMs = raw ? Number(raw) || 0 : 0;
+    const breakRaw = localStorage.getItem(this.breakStorageKey());
+    this.brokeAt = breakRaw ? Number(breakRaw) || 0 : 0;
     this.dailyFired = this.activeMs >= this.settings.dailyCapMin * 60_000;
   }
 
@@ -64,6 +70,7 @@ export class EyeCareClock {
     const every = this.settings.breakEveryMin * 60 * 1000;
     if (this.activeMs - this.brokeAt >= every) {
       this.brokeAt = this.activeMs;
+      localStorage.setItem(this.breakStorageKey(), String(this.brokeAt));
       this.running = false;
       this.onBreak?.();
     }

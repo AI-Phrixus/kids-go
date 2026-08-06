@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { uid } from "../crypto";
+import { consumeDailyQuota } from "../daily-quota";
 import { loadSession } from "../session";
 import type { Env } from "../types";
 
@@ -32,6 +33,9 @@ analytics.post("/events", async (c) => {
   }
   const event = String(body.event || "");
   if (!ALLOWED.has(event)) return c.json({ error: "invalid_event" }, 400);
+  if (!(await consumeDailyQuota(c.env.DB, `events:${sess.user.id}`, 500))) {
+    return c.json({ error: "daily_limit" }, 429);
+  }
   const id = uid();
   let payload = "{}";
   try {

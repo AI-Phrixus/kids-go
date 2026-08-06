@@ -5,5 +5,8 @@ export interface ChatMessage {
 
 export interface CoachProvider {
   readonly id: string;
-  complete(messages: ChatMessage[], opts: { maxTokens: number; temperature: number }): Promise<string>;
+  complete(
+    messages: ChatMessage[],
+    opts: { maxTokens: number; temperature: number; signal?: AbortSignal },
+  ): Promise<string>;
 }

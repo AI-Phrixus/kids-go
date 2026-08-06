@@ -38,7 +38,7 @@ COACH_TIMEOUT_MS = "5000"
 COACH_CF_SOFT_MAX_CALLS = "40"
 # Free tier: low-latency CF model (falls back to 3b on error)
 COACH_CF_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
-# free_first (default): Groq → OpenRouter free → Gemini free → CF soft → BYOK → static
-# cf_first: old order (CF soft first)
-COACH_CHAIN_MODE = "free_first"
+# Privacy-first default: CF soft → configured free tiers / BYOK → static
+# Set free_first only if the operator explicitly accepts third-party-first routing.
+COACH_CHAIN_MODE = "cf_first"
 # Optional free-tier secrets: wrangler secret put GROQ_API_KEY / OPENROUTER_API_KEY / GOOGLE_API_KEY

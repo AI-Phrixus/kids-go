@@ -9,6 +9,7 @@ import {
   type BoardState,
   type Color,
 } from "../../../packages/go-engine/src/index";
+import { APP_VERSION } from "../../../packages/app-version";
 import { api, type LessonDetail } from "./api";
 import { nextCareText, nextPostureTip } from "./care-rituals";
 import { friendlyError } from "./errors";
@@ -24,9 +25,19 @@ type Route = "welcome" | "map" | "lesson" | "free" | "settings" | "parent" | "pr
 type FreeMode = "casual" | "race5" | "race10";
 type AiLevel = 0 | 1 | 2;
 
-let locale: Locale = (localStorage.getItem("kids-go-locale") as Locale) || "zh-Hant";
+function initialLocale(): Locale {
+  const saved = localStorage.getItem("kids-go-locale");
+  if (saved === "ja" || saved === "zh-Hant" || saved === "en") return saved;
+  const browserLocale = navigator.language.toLowerCase();
+  if (browserLocale.startsWith("zh")) return "zh-Hant";
+  if (browserLocale.startsWith("en")) return "en";
+  return "ja";
+}
+
+let locale: Locale = initialLocale();
 let route: Route = "welcome";
 let nickname = "";
+let userKind: "parent" | "quick" | "" = "";
 let lessonId = "L01";
 let lesson: LessonDetail | null = null;
 let stepIndex = 0;
@@ -59,6 +70,7 @@ let chatMsgs: { id: string; fromMe: boolean; body: string; at: number }[] = [];
 let chatSince = 0;
 let chatPollTimer: number | null = null;
 let friendsStatus = "";
+let friendsReturnFocus: HTMLElement | null = null;
 /**
  * Chat compose modes:
  * - free (default): fun talk, no drill feel
@@ -117,6 +129,7 @@ async function boot() {
   try {
     const me = await api.me();
     nickname = me.child?.nickname || "";
+    userKind = me.user.kind === "parent" ? "parent" : "quick";
     if (me.child?.preferred_locale) {
       locale = me.child.preferred_locale as Locale;
       saveLocale();
@@ -138,7 +151,6 @@ function render() {
   else if (route === "parent") void renderParent();
   else if (route === "privacy") renderPrivacy();
   else if (route === "help") renderHelp();
-  bindBreak();
 }
 
 function shell(body: string) {
@@ -184,12 +196,12 @@ function shell(body: string) {
     </div>
     ${coachBanner ? `<p class="banner muted" role="status">${escapeHtml(coachBanner)}</p>` : ""}
     <p class="footer muted">
-      v0.7.6 · <span id="mins">0</span> min · free AI rotate
+      v${APP_VERSION} · <span id="mins">0</span> ${t(locale, "footer_min")} · ${t(locale, "footer_ai")}
       · <a href="#" id="help-link">${t(locale, "guide")}</a>
       · <a href="#" id="privacy-link">${t(locale, "privacy")}</a>
       · <button type="button" class="linkish" id="sfx-toggle" aria-label="SFX">${sfxEnabled() ? "🔊" : "🔇"}</button>
     </p>
-    <div class="overlay ${friendsOpen ? "" : "hidden"}" id="friends-modal" role="dialog" aria-modal="true">
+    <div class="overlay ${friendsOpen ? "" : "hidden"}" id="friends-modal" role="dialog" aria-modal="true" aria-labelledby="friends-title">
       <div class="panel friends-panel" id="friends-panel"></div>
     </div>
   `;
@@ -224,9 +236,29 @@ function shell(body: string) {
     locale = (e.target as HTMLSelectElement).value as Locale;
     saveLocale();
     void api.saveLocale(locale).catch(() => undefined);
+    coachBanner = "";
     render();
+    if (route !== "welcome" && route !== "map") void refreshCoachBanner();
   });
-  if (friendsOpen) void paintFriendsPanel();
+  bindBreak();
+  bindFriendsDialog();
+  if (friendsOpen) {
+    setFriendsBackgroundInert(true);
+    void paintFriendsPanel();
+  }
+}
+
+async function refreshCoachBanner() {
+  const requestedLocale = locale;
+  try {
+    const st = await api.coachStatus(requestedLocale);
+    if (locale !== requestedLocale) return;
+    coachBanner = st.reminder || "";
+    render();
+  } catch {
+    if (locale !== requestedLocale) return;
+    coachBanner = "";
+  }
 }
 
 function escapeHtml(s: string): string {
@@ -260,11 +292,11 @@ function renderWelcome() {
         </div>
       </div>
       <div class="tabs" role="tablist">
-        <button data-tab="quick" class="${authTab === "quick" ? "on" : ""}" role="tab">${t(locale, "quick_reg")}</button>
-        <button data-tab="parent" class="${authTab === "parent" ? "on" : ""}" role="tab">${t(locale, "parent_reg")}</button>
-        <button data-tab="login" class="${authTab === "login" ? "on" : ""}" role="tab">${t(locale, "login")}</button>
+        <button data-tab="quick" class="${authTab === "quick" ? "on" : ""}" role="tab" aria-selected="${authTab === "quick"}">${t(locale, "quick_reg")}</button>
+        <button data-tab="parent" class="${authTab === "parent" ? "on" : ""}" role="tab" aria-selected="${authTab === "parent"}">${t(locale, "parent_reg")}</button>
+        <button data-tab="login" class="${authTab === "login" ? "on" : ""}" role="tab" aria-selected="${authTab === "login"}">${t(locale, "login")}</button>
       </div>
-      <div id="auth-form"></div>
+      <div id="auth-form" role="tabpanel"></div>
       <p class="err" id="err" role="alert"></p>
       <p class="muted" style="margin-top:0.75rem">
         <a href="#" id="welcome-guide">${t(locale, "guide")}</a>
@@ -287,7 +319,7 @@ function renderWelcome() {
   if (authTab === "quick") {
     form.innerHTML = `
       <label>${t(locale, "nickname")}<input id="nick" maxlength="12" autocomplete="username" /></label>
-      <label>${t(locale, "pin")}<input id="pin" inputmode="numeric" maxlength="6" autocomplete="current-password" /></label>
+      <label>${t(locale, "pin_new")}<input id="pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" /></label>
       <button class="primary" id="go">${t(locale, "start")}</button>
     `;
     document.querySelector("#go")!.addEventListener("click", async () => {
@@ -296,13 +328,14 @@ function renderWelcome() {
       try {
         const nick = (document.querySelector("#nick") as HTMLInputElement).value.trim();
         const pin = (document.querySelector("#pin") as HTMLInputElement).value.trim();
-        if (!nick || /[<>&`"\\/]/.test(nick) || !/^\d{4,6}$/.test(pin)) {
+        if (!nick || /[<>&`"\\/]/.test(nick) || !/^\d{6}$/.test(pin)) {
           showErr(friendlyError("invalid_input", locale));
           btn.disabled = false;
           return;
         }
         await api.registerQuick({ nickname: nick, pin, locale });
         nickname = nick;
+        userKind = "quick";
         route = "map";
         pushNav("map");
         render();
@@ -328,6 +361,7 @@ function renderWelcome() {
         const nick = (document.querySelector("#nick") as HTMLInputElement).value.trim();
         await api.registerParent({ email, password, childNickname: nick, locale });
         nickname = nick;
+        userKind = "parent";
         route = "map";
         pushNav("map");
         render();
@@ -354,6 +388,7 @@ function renderWelcome() {
         await api.loginQuick(id, secret);
         const me = await api.me();
         nickname = me.child?.nickname || id;
+        userKind = me.user.kind === "parent" ? "parent" : "quick";
         route = "map";
         pushNav("map");
         render();
@@ -368,6 +403,7 @@ function renderWelcome() {
         await api.loginParent(id, secret);
         const me = await api.me();
         nickname = me.child?.nickname || "";
+        userKind = me.user.kind === "parent" ? "parent" : "quick";
         route = "map";
         pushNav("map");
         render();
@@ -457,8 +493,8 @@ async function renderMap() {
         <div class="row">
           <button id="friends" class="primary">${t(locale, "friends")}</button>
           <button id="guide-btn">${t(locale, "guide")}</button>
-          <button id="parent">${t(locale, "parent")}</button>
-          <button id="settings">${t(locale, "settings")}</button>
+          ${userKind === "parent" ? `<button id="parent">${t(locale, "parent")}</button>` : ""}
+          ${userKind === "parent" ? `<button id="settings">${t(locale, "settings")}</button>` : ""}
           <button id="logout">${t(locale, "logout")}</button>
         </div>
       </div>
@@ -476,6 +512,8 @@ async function renderMap() {
   `);
   document.querySelector("#logout")?.addEventListener("click", async () => {
     await api.logout();
+    nickname = "";
+    userKind = "";
     route = "welcome";
     render();
   });
@@ -621,7 +659,7 @@ function renderLesson() {
   }
 
   shell(`
-    <div class="card">
+    <div class="card game-card">
       <div class="row between">
         <h2>${lesson.id} · ${escapeHtml(title)}</h2>
         ${phase === "steps" ? mascotSvg("idle") : ""}
@@ -676,33 +714,41 @@ function renderFree() {
         : t(locale, "casual");
   const turn = board.toPlay === "black" ? t(locale, "turn_black") : t(locale, "turn_white");
   shell(`
-    <div class="card">
+    <div class="card game-card free-card">
       <div class="row between">
         <h2>${t(locale, "free")}</h2>
         <button id="home">${t(locale, "home")}</button>
       </div>
-      <div class="row">
-        <button id="mode-casual" class="${freeMode === "casual" ? "primary" : ""}">${t(locale, "casual")}</button>
-        <button id="mode-r5" class="${freeMode === "race5" ? "primary" : ""}">${t(locale, "race5")}</button>
-        <button id="mode-r10" class="${freeMode === "race10" ? "primary" : ""}">${t(locale, "race10")}</button>
-        <button id="pass">${t(locale, "pass")}</button>
-        <button id="undo" ${freeHistory.length ? "" : "disabled"}>${t(locale, "undo")}</button>
-        <button id="reset">${t(locale, "reset")}</button>
+      <div class="free-layout">
+        <div class="free-controls">
+          <div class="row">
+            <button id="mode-casual" class="${freeMode === "casual" ? "primary" : ""}">${t(locale, "casual")}</button>
+            <button id="mode-r5" class="${freeMode === "race5" ? "primary" : ""}">${t(locale, "race5")}</button>
+            <button id="mode-r10" class="${freeMode === "race10" ? "primary" : ""}">${t(locale, "race10")}</button>
+          </div>
+          <div class="row">
+            <button id="pass">${t(locale, "pass")}</button>
+            <button id="undo" ${freeHistory.length ? "" : "disabled"}>${t(locale, "undo")}</button>
+            <button id="reset">${t(locale, "reset")}</button>
+          </div>
+          <div class="row free-options">
+            <label class="check"><input type="checkbox" id="libs" ${showLibs ? "checked" : ""}/> ${t(locale, "show_libs")}</label>
+            <label class="inline">${t(locale, "ai_level")}
+              <select id="ai-level">
+                <option value="0" ${freeAiLevel === 0 ? "selected" : ""}>${t(locale, "ai_easy")}</option>
+                <option value="1" ${freeAiLevel === 1 ? "selected" : ""}>${t(locale, "ai_normal")}</option>
+                <option value="2" ${freeAiLevel === 2 ? "selected" : ""}>${t(locale, "ai_hard")}</option>
+              </select>
+            </label>
+          </div>
+          <p class="muted">${escapeHtml(raceLabel)} · B${board.captured.black} / W${board.captured.white} · ${turn}</p>
+          <p class="bubble" role="status">${escapeHtml(statusMsg || t(locale, "free_vs", { name: name() }))}</p>
+          <button id="ask">${t(locale, "ask")}</button>
+        </div>
+        <div class="board-pane">
+          ${boardHtml(board, !boardBusy)}
+        </div>
       </div>
-      <div class="row">
-        <label class="check"><input type="checkbox" id="libs" ${showLibs ? "checked" : ""}/> ${t(locale, "show_libs")}</label>
-        <label class="inline">${t(locale, "ai_level")}
-          <select id="ai-level">
-            <option value="0" ${freeAiLevel === 0 ? "selected" : ""}>${t(locale, "ai_easy")}</option>
-            <option value="1" ${freeAiLevel === 1 ? "selected" : ""}>${t(locale, "ai_normal")}</option>
-            <option value="2" ${freeAiLevel === 2 ? "selected" : ""}>${t(locale, "ai_hard")}</option>
-          </select>
-        </label>
-      </div>
-      <p class="muted">${escapeHtml(raceLabel)} · B${board.captured.black} / W${board.captured.white} · ${turn}</p>
-      ${boardHtml(board, !boardBusy)}
-      <p class="bubble" role="status">${escapeHtml(statusMsg || t(locale, "free_vs", { name: name() }))}</p>
-      <button id="ask">${t(locale, "ask")}</button>
     </div>
   `);
   document.querySelector("#home")?.addEventListener("click", () => {
@@ -788,19 +834,21 @@ function boardHtml(b: BoardState, interactive: boolean): string {
       const stone = c === "black" ? "black" : c === "white" ? "white" : "";
       const last = lastMove && lastMove.x === x && lastMove.y === y ? " last" : "";
       const hoshi = !c && HOSHI_9.has(`${x},${y}`) ? " hoshi" : "";
-      const focused = focusCell && focusCell.x === x && focusCell.y === y ? " focus" : "";
+      const isFocused = focusCell ? focusCell.x === x && focusCell.y === y : x === 4 && y === 4;
+      const focused = isFocused ? " focus" : "";
       let libLabel = "";
       if (showLibs && c) {
         const libs = groupLiberties(b, x, y);
         libLabel = `<span class="lib-num">${libs}</span>`;
       }
-      const label = c
-        ? `${c} ${x + 1},${y + 1}`
-        : `empty ${x + 1},${y + 1}`;
-      return `<button type="button" class="cell ${stone}${last}${hoshi}${focused}" data-x="${x}" data-y="${y}" aria-label="${label}" ${interactive ? "" : "disabled"}>${libLabel}</button>`;
+      const label = `${t(locale, c === "black" ? "board_black" : c === "white" ? "board_white" : "board_empty")} ${x + 1},${y + 1}`;
+      const stoneHtml = c ? `<span class="stone ${stone}" aria-hidden="true"></span>` : "";
+      const hoshiHtml = hoshi ? `<span class="hoshi-dot" aria-hidden="true"></span>` : "";
+      const edges = `${x === 0 ? " edge-left" : ""}${x === size - 1 ? " edge-right" : ""}${y === 0 ? " edge-top" : ""}${y === size - 1 ? " edge-bottom" : ""}`;
+      return `<button type="button" class="cell ${stone}${last}${focused}${edges}" data-x="${x}" data-y="${y}" aria-label="${label}" tabindex="${interactive && isFocused ? "0" : "-1"}" ${interactive ? "" : "disabled"}>${hoshiHtml}${stoneHtml}${libLabel}</button>`;
     })
     .join("");
-  return `<div class="board" role="grid" aria-label="Go board 9x9" style="grid-template-columns:repeat(${size},1fr)" tabindex="0">${cells}</div>`;
+  return `<p class="board-rule">✦ ${t(locale, "intersection_hint")}</p><div class="board" role="grid" aria-label="${t(locale, "board_label")}" style="grid-template-columns:repeat(${size},1fr)">${cells}</div>`;
 }
 
 function bindBoardClicks() {
@@ -820,6 +868,10 @@ function bindBoardKeyboard() {
   if (!focusCell) focusCell = { x: 4, y: 4 };
   boardEl.addEventListener("keydown", (e) => {
     if (!focusCell) focusCell = { x: 4, y: 4 };
+    const target = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>(".cell");
+    if (target) {
+      focusCell = { x: Number(target.dataset.x), y: Number(target.dataset.y) };
+    }
     const k = e.key;
     let moved = false;
     if (k === "ArrowLeft") {
@@ -842,8 +894,12 @@ function bindBoardKeyboard() {
     if (moved) {
       e.preventDefault();
       document.querySelectorAll(".cell.focus").forEach((el) => el.classList.remove("focus"));
+      document.querySelectorAll<HTMLButtonElement>(".cell").forEach((el) => {
+        el.tabIndex = -1;
+      });
       const cell = document.querySelector(`.cell[data-x="${focusCell.x}"][data-y="${focusCell.y}"]`);
       cell?.classList.add("focus");
+      if (cell instanceof HTMLButtonElement) cell.tabIndex = 0;
       (cell as HTMLElement | null)?.focus();
     }
   });
@@ -906,6 +962,7 @@ function onTap(x: number, y: number) {
     boardBusy = true;
     const capBefore = board.captured.white;
     const mv = pickAiMove(board, freeAiLevel);
+    let aiPassed = false;
     if (mv) {
       const after = tryPlay(board, mv.x, mv.y);
       if (after) {
@@ -913,7 +970,15 @@ function onTap(x: number, y: number) {
         board = after;
         lastMove = { x: mv.x, y: mv.y };
         consecutivePasses = 0;
+      } else {
+        board = pass(board);
+        consecutivePasses++;
+        aiPassed = true;
       }
+    } else {
+      board = pass(board);
+      consecutivePasses++;
+      aiPassed = true;
     }
     boardBusy = false;
     win = target ? captureRaceWinner(board.captured, target) : null;
@@ -921,6 +986,8 @@ function onTap(x: number, y: number) {
       statusMsg = t(locale, "race_lose", { n: target });
     } else if (win === "black") {
       statusMsg = t(locale, "race_win", { name: name(), n: target });
+    } else if (aiPassed) {
+      statusMsg = t(locale, "ai_passed");
     } else {
       statusMsg = `${name()} · B${board.captured.black}/W${board.captured.white}${target ? ` (${target})` : ""}`;
     }
@@ -967,7 +1034,11 @@ function handleBattleMove(x: number, y: number) {
       if (after) {
         board = after;
         lastMove = { x: mv.x, y: mv.y };
+      } else {
+        board = pass(board);
       }
+    } else {
+      board = pass(board);
     }
     boardBusy = false;
     statusMsg = t(locale, "place_progress", { cur: humanMoves, need });
@@ -993,7 +1064,11 @@ function handleBattleMove(x: number, y: number) {
       if (after) {
         board = after;
         lastMove = { x: mv.x, y: mv.y };
+      } else {
+        board = pass(board);
       }
+    } else {
+      board = pass(board);
     }
     boardBusy = false;
     if (board.captured.black >= need) {
@@ -1143,17 +1218,58 @@ function stopChatPoll() {
 }
 
 function openFriends() {
+  friendsReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   friendsOpen = true;
   friendsStatus = "";
-  void paintFriendsPanel();
   const el = document.querySelector("#friends-modal");
   el?.classList.remove("hidden");
+  setFriendsBackgroundInert(true);
+  void paintFriendsPanel();
 }
 
 function closeFriends() {
   friendsOpen = false;
   stopChatPoll();
   document.querySelector("#friends-modal")?.classList.add("hidden");
+  setFriendsBackgroundInert(false);
+  if (friendsReturnFocus?.isConnected) friendsReturnFocus.focus();
+  friendsReturnFocus = null;
+}
+
+function setFriendsBackgroundInert(inert: boolean) {
+  const modal = document.querySelector("#friends-modal");
+  for (const child of Array.from(app.children)) {
+    if (child !== modal && child instanceof HTMLElement) child.inert = inert;
+  }
+}
+
+function bindFriendsDialog() {
+  const modal = document.querySelector("#friends-modal");
+  if (!modal) return;
+  modal.addEventListener("keydown", (event) => {
+    if (!(event instanceof KeyboardEvent)) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeFriends();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(
+      modal.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]',
+      ),
+    ).filter((el) => !el.hidden && el.getClientRects().length > 0);
+    if (!focusable.length) return;
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
 }
 
 async function paintFriendsPanel() {
@@ -1275,11 +1391,15 @@ async function paintFriendsPanel() {
 
     panel.innerHTML = `
       <div class="row between">
-        <h2>${t(locale, "friends_title")}</h2>
+        <h2 id="friends-title">${t(locale, "friends_title")}</h2>
         <button type="button" id="fclose">${t(locale, "friends_close")}</button>
       </div>
       ${tabs}
       <div class="friends-body">${body}</div>`;
+
+    if (friendsOpen && !panel.contains(document.activeElement)) {
+      (panel.querySelector("#fclose") as HTMLButtonElement | null)?.focus();
+    }
 
     panel.querySelector("#fclose")?.addEventListener("click", () => closeFriends());
     panel.querySelectorAll("[data-ftab]").forEach((b) =>
@@ -1529,7 +1649,7 @@ function renderHelp() {
         <button type="button" class="primary" id="home">${t(locale, "home")}</button>
       </div>
       <p class="story muted">${t(locale, "guide_intro")}</p>
-      <nav class="guide-toc" aria-label="TOC">${guideTocHtml(locale)}</nav>
+      <nav class="guide-toc" aria-label="${t(locale, "guide_toc")}">${guideTocHtml(locale)}</nav>
       <div class="guide-body">${guideBodyHtml(locale)}</div>
       <div class="row">
         <button type="button" class="primary" id="home2">${t(locale, "home")}</button>
@@ -1553,10 +1673,36 @@ function renderHelp() {
   });
 }
 
-async function renderParent() {
+async function renderParent(parentPassword = "") {
+  if (userKind !== "parent") {
+    shell(`<div class="card"><p class="err">${escapeHtml(friendlyError("parent_required", locale))}</p><button id="home">${t(locale, "home")}</button></div>`);
+    document.querySelector("#home")?.addEventListener("click", () => goHome());
+    return;
+  }
+  if (!parentPassword) {
+    shell(`<div class="card">
+      <h2>${t(locale, "parent")}</h2>
+      <p class="muted">${t(locale, "parent_verify")}</p>
+      <label>${t(locale, "password")}<input id="parent-pass" type="password" maxlength="128" autocomplete="current-password" /></label>
+      <div class="row"><button class="primary" id="parent-open">${t(locale, "continue_lesson")}</button><button id="home">${t(locale, "home")}</button></div>
+      <p class="err" id="parent-err" role="alert"></p>
+    </div>`);
+    document.querySelector("#home")?.addEventListener("click", () => goHome());
+    document.querySelector("#parent-open")?.addEventListener("click", () => {
+      const pass = (document.querySelector("#parent-pass") as HTMLInputElement | null)?.value || "";
+      if (!pass) {
+        const el = document.querySelector("#parent-err");
+        if (el) el.textContent = friendlyError("parent_verification_required", locale);
+        return;
+      }
+      void renderParent(pass);
+    });
+    bindEnterSubmit("parent-open");
+    return;
+  }
   let body = `<p class="muted">${t(locale, "loading")}</p>`;
   try {
-    const s = await api.parentSummary(locale);
+    const s = await api.parentSummary(locale, parentPassword);
     let usageHtml = "";
     try {
       const u = await api.usageStats();
@@ -1658,7 +1804,7 @@ function renderPrivacy() {
         <h3>AI 與跨境</h3>
         <ul>
           <li>預設優先 Cloudflare Workers AI（免費額）；額度到了才用你設定的第三方或本地句庫。</li>
-          <li>若使用第三方 API，請求內容（盤面摘要、暱稱）會送往該供應商，受其隱私政策約束。</li>
+          <li>若使用第三方 API，只會傳送去識別化的盤面摘要與通用稱呼，不傳送孩子暱稱；內容仍受該供應商隱私政策約束。</li>
         </ul>
         <h3>兒童與家長</h3>
         <ul>
@@ -1688,7 +1834,7 @@ function renderPrivacy() {
         <h3>AI</h3>
         <ul>
           <li>優先：Cloudflare Workers AI（無料枠）→ 第三者 BYOK → 定型文。</li>
-          <li>第三者 API 利用時は盤面要約・なまえがその規約に従います。</li>
+          <li>第三者 API には匿名化した盤面要約と一般的な呼び名だけを送り、お子さまのなまえは送りません。</li>
         </ul>
         <h3>お子さまと保護者</h3>
         <ul>
@@ -1701,6 +1847,7 @@ function renderPrivacy() {
           <li>No public leaderboards or stranger matchmaking.</li>
           <li>Optional third-party AI keys stay in your settings (last 4 chars shown).</li>
           <li>Coach: Cloudflare free AI first, then your BYOK, then offline phrases.</li>
+          <li>Third-party AI receives an anonymized board summary and a generic name, never the child's nickname.</li>
           <li>Parents should help manage PIN/email for children.</li>
           <li>We do not sell personal data or force real name/school/location.</li>
         </ul>`;
@@ -1711,6 +1858,11 @@ function renderPrivacy() {
 }
 
 async function renderSettings() {
+  if (userKind !== "parent") {
+    shell(`<div class="card"><p class="err">${escapeHtml(friendlyError("parent_required", locale))}</p><button id="home">${t(locale, "home")}</button></div>`);
+    document.querySelector("#home")?.addEventListener("click", () => goHome());
+    return;
+  }
   let body = `<p class="muted">${t(locale, "loading")}</p>`;
   try {
     const data = await api.getAiSettings();
@@ -1755,6 +1907,10 @@ async function renderSettings() {
         <input type="checkbox" id="preferByok" ${c.preferByok ? "checked" : ""} />
         ${t(locale, "prefer_byok")}
       </label>
+      <p class="muted">${t(locale, "parent_verify")}</p>
+      <label>${t(locale, "password")}
+        <input id="parentPassword" type="password" maxlength="128" autocomplete="current-password" />
+      </label>
       <div class="row">
         <button class="primary" id="saveAi">${t(locale, "save")}</button>
         <button id="testAi">${t(locale, "test_ai")}</button>
@@ -1792,12 +1948,14 @@ async function renderSettings() {
   document.querySelector("#saveAi")?.addEventListener("click", async () => {
     const msg = document.querySelector("#setMsg");
     try {
+      const parentPassword = (document.querySelector("#parentPassword") as HTMLInputElement).value;
       await api.saveAiSettings({
         provider: (document.querySelector("#provider") as HTMLSelectElement).value,
         baseUrl: (document.querySelector("#baseUrl") as HTMLInputElement).value.trim(),
         apiKey: (document.querySelector("#apiKey") as HTMLInputElement).value,
         model: (document.querySelector("#model") as HTMLInputElement).value.trim(),
         preferByok: (document.querySelector("#preferByok") as HTMLInputElement).checked,
+        parentPassword,
       });
       if (msg) msg.textContent = t(locale, "saved");
       const k = document.querySelector("#apiKey") as HTMLInputElement | null;
@@ -1809,7 +1967,8 @@ async function renderSettings() {
   document.querySelector("#clearKey")?.addEventListener("click", async () => {
     const msg = document.querySelector("#setMsg");
     try {
-      await api.saveAiSettings({ clearApiKey: true });
+      const parentPassword = (document.querySelector("#parentPassword") as HTMLInputElement).value;
+      await api.saveAiSettings({ clearApiKey: true, parentPassword });
       if (msg) msg.textContent = t(locale, "saved");
     } catch (err) {
       if (msg) msg.textContent = errMsg(err);
@@ -1820,6 +1979,7 @@ async function renderSettings() {
     if (msg) msg.textContent = t(locale, "testing");
     try {
       const key = (document.querySelector("#apiKey") as HTMLInputElement)?.value;
+      const parentPassword = (document.querySelector("#parentPassword") as HTMLInputElement).value;
       if (key) {
         await api.saveAiSettings({
           provider: (document.querySelector("#provider") as HTMLSelectElement).value,
@@ -1827,9 +1987,10 @@ async function renderSettings() {
           apiKey: key,
           model: (document.querySelector("#model") as HTMLInputElement).value.trim(),
           preferByok: (document.querySelector("#preferByok") as HTMLInputElement).checked,
+          parentPassword,
         });
       }
-      const r = await api.testAiSettings();
+      const r = await api.testAiSettings(parentPassword);
       if (msg) msg.textContent = r.ok ? `OK: ${r.sample || "ok"}` : r.error || "fail";
     } catch (err) {
       if (msg) msg.textContent = errMsg(err);

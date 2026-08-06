@@ -102,13 +102,14 @@ export const api = {
     model?: string;
     preferByok?: boolean;
     clearApiKey?: boolean;
+    parentPassword: string;
   }) => req("/api/settings/ai", { method: "PUT", body: JSON.stringify(body) }),
-  testAiSettings: () =>
+  testAiSettings: (parentPassword: string) =>
     req<{ ok: boolean; sample?: string; error?: string }>("/api/settings/ai/test", {
       method: "POST",
-      body: "{}",
+      body: JSON.stringify({ parentPassword }),
     }),
-  parentSummary: (locale: string) =>
+  parentSummary: (locale: string, parentPassword: string) =>
     req<{
       headline: string;
       stats: {
@@ -123,7 +124,10 @@ export const api = {
       nextLesson: { id: string; title: string } | null;
       parentTips: string[];
       note: string;
-    }>(`/api/parent/summary?locale=${encodeURIComponent(locale)}`),
+    }>("/api/parent/summary", {
+      method: "POST",
+      body: JSON.stringify({ locale, parentPassword }),
+    }),
   badges: () =>
     req<{ badges: { badge_id: string; earned_at: number }[] }>("/api/badges"),
   saveLocale: (locale: string) =>

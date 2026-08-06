@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { LESSONS } from "../lessons-data";
+import { verifyParentAccess } from "../parent-auth";
 import { loadSession } from "../session";
 import type { Env } from "../types";
 
@@ -52,10 +53,32 @@ const BADGE_NAMES: Record<string, { ja: string; "zh-Hant": string; en: string }>
   graduation: { ja: "卒業", "zh-Hant": "西天門畢業", en: "Graduate" },
 };
 
+// Keep the old GET surface explicit, but never expose a parent report without
+// re-authentication. The UI uses POST so the password is not placed in a URL.
 parent.get("/parent/summary", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
+  if (!sess) return c.json({ error: "unauthorized" }, 401);
+  if (sess.user.kind !== "parent") return c.json({ error: "parent_required" }, 403);
+  return c.json({ error: "parent_verification_required" }, 403);
+});
+
+parent.post("/parent/summary", async (c) => {
+  const sess = await loadSession(c.env, c.req.header("Cookie"));
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
-  const locale = (c.req.query("locale") || sess.child.preferred_locale || "zh-Hant") as
+  if (sess.user.kind !== "parent") return c.json({ error: "parent_required" }, 403);
+  let body: { locale?: string; parentPassword?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!(await verifyParentAccess(c.env, sess, body.parentPassword))) {
+    return c.json({ error: "parent_verification_required" }, 403);
+  }
+  const locale = (body.locale || sess.child.preferred_locale || "zh-Hant") as
     | "ja"
     | "zh-Hant"
     | "en";

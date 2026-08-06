@@ -1,13 +1,20 @@
 import { Hono } from "hono";
-import { mergeAiConfig, parseAiConfig, publicAiConfig } from "../ai-config";
+import { isSafeAiBaseUrl, mergeAiConfig, parseAiConfig, publicAiConfig } from "../ai-config";
+import { consumeDailyQuota } from "../daily-quota";
+import { verifyParentAccess } from "../parent-auth";
 import { loadSession } from "../session";
 import type { Env } from "../types";
 
 const settings = new Hono<{ Bindings: Env }>();
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return Boolean(v) && typeof v === "object" && !Array.isArray(v);
+}
+
 settings.get("/ai", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
   if (!sess) return c.json({ error: "unauthorized" }, 401);
+  if (sess.user.kind !== "parent") return c.json({ error: "parent_required" }, 403);
   const row = await c.env.DB.prepare(`SELECT ai_config_json FROM users WHERE id = ?`)
     .bind(sess.user.id)
     .first<{ ai_config_json: string | null }>();
@@ -70,14 +77,25 @@ settings.get("/ai", async (c) => {
 settings.put("/ai", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
   if (!sess) return c.json({ error: "unauthorized" }, 401);
-  const body = await c.req.json<{
+  if (sess.user.kind !== "parent") return c.json({ error: "parent_required" }, 403);
+  let body: {
     provider?: string;
     baseUrl?: string;
     apiKey?: string;
     model?: string;
     preferByok?: boolean;
     clearApiKey?: boolean;
-  }>();
+    parentPassword?: string;
+  };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!isRecord(body)) return c.json({ error: "invalid_json" }, 400);
+  if (!(await verifyParentAccess(c.env, sess, body.parentPassword))) {
+    return c.json({ error: "parent_verification_required" }, 403);
+  }
 
   const row = await c.env.DB.prepare(`SELECT ai_config_json FROM users WHERE id = ?`)
     .bind(sess.user.id)
@@ -85,11 +103,28 @@ settings.put("/ai", async (c) => {
   const prev = parseAiConfig(row?.ai_config_json);
   const next = mergeAiConfig(prev, body);
 
+  if (next.provider === "workers_ai" || next.provider === "none") {
+    next.baseUrl = "";
+    next.apiKey = "";
+    next.model = "";
+    next.preferByok = false;
+  } else if (next.provider === "google") {
+    next.baseUrl = "";
+  } else if (next.provider === "xai") {
+    next.baseUrl = "https://api.x.ai/v1";
+  }
+
   // validation
-  if (next.provider === "openai_compatible" || (next.provider === "auto" && next.baseUrl)) {
-    if (next.baseUrl && !/^https:\/\//i.test(next.baseUrl)) {
+  if (next.baseUrl) {
+    if (!/^https:\/\//i.test(next.baseUrl)) {
       return c.json({ error: "base_url_must_https" }, 400);
     }
+    if (!isSafeAiBaseUrl(next.baseUrl)) {
+      return c.json({ error: "unsafe_base_url" }, 400);
+    }
+  }
+  if (next.baseUrl.length > 300 || next.model.length > 120) {
+    return c.json({ error: "invalid_input" }, 400);
   }
   if (next.apiKey && next.apiKey.length > 512) {
     return c.json({ error: "api_key_too_long" }, 400);
@@ -106,10 +141,27 @@ settings.put("/ai", async (c) => {
 settings.post("/ai/test", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
   if (!sess) return c.json({ error: "unauthorized" }, 401);
+  if (sess.user.kind !== "parent") return c.json({ error: "parent_required" }, 403);
+  let body: { parentPassword?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!isRecord(body)) return c.json({ error: "invalid_json" }, 400);
+  if (!(await verifyParentAccess(c.env, sess, body.parentPassword))) {
+    return c.json({ error: "parent_verification_required" }, 403);
+  }
+  if (!(await consumeDailyQuota(c.env.DB, `ai-test:${sess.user.id}`, 20))) {
+    return c.json({ error: "daily_limit" }, 429);
+  }
   const row = await c.env.DB.prepare(`SELECT ai_config_json FROM users WHERE id = ?`)
     .bind(sess.user.id)
     .first<{ ai_config_json: string | null }>();
   const cfg = parseAiConfig(row?.ai_config_json);
+  if (cfg.baseUrl && !isSafeAiBaseUrl(cfg.baseUrl)) {
+    return c.json({ ok: false, error: "unsafe_base_url" }, 400);
+  }
   if (!cfg.apiKey && !cfg.baseUrl) {
     return c.json({ ok: false, error: "not_configured" }, 400);
   }
@@ -121,27 +173,34 @@ settings.post("/ai/test", async (c) => {
       { role: "system" as const, content: "Reply with one word: ok" },
       { role: "user" as const, content: "ping" },
     ];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
     let text = "";
-    if (cfg.provider === "google") {
-      if (!cfg.apiKey) return c.json({ ok: false, error: "missing_api_key" }, 400);
-      text = await createGoogleProvider({
-        apiKey: cfg.apiKey,
-        model: cfg.model || "gemini-2.0-flash",
-      }).complete(msgs, { maxTokens: 16, temperature: 0 });
-    } else if (cfg.provider === "xai" || cfg.baseUrl.includes("x.ai")) {
-      if (!cfg.apiKey) return c.json({ ok: false, error: "missing_api_key" }, 400);
-      text = await createXaiProvider(cfg.apiKey, cfg.model || "grok-4.5").complete(msgs, {
-        maxTokens: 16,
-        temperature: 0,
-      });
-    } else if (cfg.baseUrl && cfg.apiKey) {
-      text = await createOpenAICompatibleProvider({
-        baseUrl: cfg.baseUrl,
-        apiKey: cfg.apiKey,
-        model: cfg.model || "gpt-4o-mini",
-      }).complete(msgs, { maxTokens: 16, temperature: 0 });
-    } else {
-      return c.json({ ok: false, error: "incomplete_config" }, 400);
+    try {
+      if (cfg.provider === "google") {
+        if (!cfg.apiKey) return c.json({ ok: false, error: "missing_api_key" }, 400);
+        text = await createGoogleProvider({
+          apiKey: cfg.apiKey,
+          model: cfg.model || "gemini-2.0-flash",
+        }).complete(msgs, { maxTokens: 16, temperature: 0, signal: controller.signal });
+      } else if (cfg.provider === "xai" || cfg.baseUrl.includes("x.ai")) {
+        if (!cfg.apiKey) return c.json({ ok: false, error: "missing_api_key" }, 400);
+        text = await createXaiProvider(cfg.apiKey, cfg.model || "grok-4.5").complete(msgs, {
+          maxTokens: 16,
+          temperature: 0,
+          signal: controller.signal,
+        });
+      } else if (cfg.baseUrl && cfg.apiKey) {
+        text = await createOpenAICompatibleProvider({
+          baseUrl: cfg.baseUrl,
+          apiKey: cfg.apiKey,
+          model: cfg.model || "gpt-4o-mini",
+        }).complete(msgs, { maxTokens: 16, temperature: 0, signal: controller.signal });
+      } else {
+        return c.json({ ok: false, error: "incomplete_config" }, 400);
+      }
+    } finally {
+      clearTimeout(timer);
     }
     return c.json({ ok: true, sample: String(text).slice(0, 80) });
   } catch (e) {

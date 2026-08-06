@@ -3,8 +3,24 @@ import { LESSONS, getLesson } from "../lessons-data";
 import { loadSession } from "../session";
 import type { Env } from "../types";
 import { uid } from "../crypto";
+import { consumeDailyQuota } from "../daily-quota";
 
 const progress = new Hono<{ Bindings: Env }>();
+const MAX_SAVED_MOVES = 200;
+const MAX_MOVES_JSON_BYTES = 8_000;
+const gameHits = new Map<string, { n: number; t: number }>();
+
+function canSaveGame(childId: string, max = 60, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const row = gameHits.get(childId);
+  if (!row || now - row.t > windowMs) {
+    gameHits.set(childId, { n: 1, t: now });
+    return true;
+  }
+  if (row.n >= max) return false;
+  row.n += 1;
+  return true;
+}
 
 async function requireChild(c: {
   env: Env;
@@ -102,20 +118,34 @@ progress.post("/progress/:lessonId", async (c) => {
     }
   }
 
-  const body = await c.req.json<{
-    status?: "in_progress" | "completed";
-    stars?: number;
-  }>();
+  let body: { status?: "in_progress" | "completed"; stars?: number };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return c.json({ error: "invalid_json" }, 400);
+  }
   const status = body.status ?? "completed";
-  const stars = Math.min(3, Math.max(0, body.stars ?? 1));
+  if (status !== "in_progress" && status !== "completed") {
+    return c.json({ error: "invalid_input" }, 400);
+  }
+  const rawStars = body.stars ?? 1;
+  if (!Number.isFinite(rawStars)) return c.json({ error: "invalid_input" }, 400);
+  const stars = Math.min(3, Math.max(0, Math.trunc(rawStars)));
   const now = Date.now();
 
+  if (!(await consumeDailyQuota(c.env.DB, `progress:${sess.child.id}`, 200))) {
+    return c.json({ error: "daily_limit" }, 429);
+  }
   const existing = await c.env.DB.prepare(
-    `SELECT stars FROM lesson_progress WHERE child_id = ? AND lesson_id = ?`,
+    `SELECT status, stars FROM lesson_progress WHERE child_id = ? AND lesson_id = ?`,
   )
     .bind(sess.child.id, lessonId)
-    .first<{ stars: number }>();
+    .first<{ status: string; stars: number }>();
   const bestStars = Math.max(existing?.stars ?? 0, stars);
+  const bestStatus = existing?.status === "completed" ? "completed" : status;
   await c.env.DB.prepare(
     `INSERT INTO lesson_progress (child_id, lesson_id, status, stars, updated_at)
      VALUES (?, ?, ?, ?, ?)
@@ -124,10 +154,10 @@ progress.post("/progress/:lessonId", async (c) => {
        stars = excluded.stars,
        updated_at = excluded.updated_at`,
   )
-    .bind(sess.child.id, lessonId, status, bestStars, now)
+    .bind(sess.child.id, lessonId, bestStatus, bestStars, now)
     .run();
 
-  if (status === "completed") {
+  if (bestStatus === "completed") {
     await c.env.DB.prepare(
       `INSERT OR IGNORE INTO badges (child_id, badge_id, earned_at) VALUES (?, ?, ?)`,
     )
@@ -152,13 +182,44 @@ progress.post("/progress/:lessonId", async (c) => {
 progress.post("/games", async (c) => {
   const sess = await requireChild(c);
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
-  const body = await c.req.json<{
+  if (!canSaveGame(sess.child.id)) return c.json({ error: "rate_limited" }, 429);
+  let body: {
     lessonId?: string;
     boardSize?: number;
     result?: string;
     moves?: unknown;
     aiLevel?: number;
-  }>();
+  };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  const boardSize = body.boardSize ?? 9;
+  const aiLevel = body.aiLevel ?? 0;
+  const lessonId = body.lessonId ?? null;
+  if (
+    boardSize !== 9 ||
+    !Number.isInteger(aiLevel) ||
+    aiLevel < 0 ||
+    aiLevel > 2 ||
+    (lessonId !== null && (typeof lessonId !== "string" || !getLesson(lessonId))) ||
+    (body.result !== undefined && typeof body.result !== "string") ||
+    !Array.isArray(body.moves) ||
+    body.moves.length > MAX_SAVED_MOVES
+  ) {
+    return c.json({ error: "invalid_input" }, 400);
+  }
+  const movesJson = JSON.stringify(body.moves);
+  if (movesJson.length > MAX_MOVES_JSON_BYTES) {
+    return c.json({ error: "payload_too_large" }, 413);
+  }
+  if (!(await consumeDailyQuota(c.env.DB, `games:${sess.child.id}`, 200))) {
+    return c.json({ error: "daily_limit" }, 429);
+  }
   const id = uid();
   await c.env.DB.prepare(
     `INSERT INTO games (id, child_id, lesson_id, board_size, result, moves_json, ai_level, created_at)
@@ -167,11 +228,11 @@ progress.post("/games", async (c) => {
     .bind(
       id,
       sess.child.id,
-      body.lessonId ?? null,
-      body.boardSize ?? 9,
-      body.result ?? null,
-      JSON.stringify(body.moves ?? []),
-      body.aiLevel ?? 0,
+      lessonId,
+      boardSize,
+      body.result?.slice(0, 40) ?? null,
+      movesJson,
+      aiLevel,
       Date.now(),
     )
     .run();

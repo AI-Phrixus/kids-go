@@ -18,33 +18,12 @@ export function utcDay(d = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function ensureQuotaTable(db: D1Database): Promise<void> {
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS coach_quota (
-        day TEXT PRIMARY KEY,
-        cf_success INTEGER NOT NULL DEFAULT 0,
-        cf_fail_quota INTEGER NOT NULL DEFAULT 0,
-        byok_success INTEGER NOT NULL DEFAULT 0,
-        static_fallback INTEGER NOT NULL DEFAULT 0,
-        cf_blocked_soft INTEGER NOT NULL DEFAULT 0,
-        last_alert TEXT
-      )`,
-    )
-    .run();
-}
-
 export async function getQuota(db: D1Database, day: string): Promise<QuotaRow> {
-  await ensureQuotaTable(db);
   const row = await db
     .prepare(`SELECT * FROM coach_quota WHERE day = ?`)
     .bind(day)
     .first<QuotaRow>();
   if (row) return row;
-  await db
-    .prepare(`INSERT OR IGNORE INTO coach_quota (day) VALUES (?)`)
-    .bind(day)
-    .run();
   return {
     day,
     cf_success: 0,
@@ -66,7 +45,6 @@ export async function bumpQuota(
     | "static_fallback"
     | "cf_blocked_soft",
 ): Promise<void> {
-  await ensureQuotaTable(db);
   await db
     .prepare(
       `INSERT INTO coach_quota (day, ${field}) VALUES (?, 1)
@@ -77,7 +55,6 @@ export async function bumpQuota(
 }
 
 export async function setAlert(db: D1Database, day: string, msg: string): Promise<void> {
-  await ensureQuotaTable(db);
   await db
     .prepare(
       `INSERT INTO coach_quota (day, last_alert) VALUES (?, ?)
@@ -132,4 +109,10 @@ export function quotaStatusMessage(q: QuotaRow, maxCalls: number, locale: string
     return `Reminder: ~${left} free CF coach calls left today (soft cap ${maxCalls}).`;
   }
   return `CF free coach used ${used}/${maxCalls} today.`;
+}
+
+export function staticCoachStatusMessage(locale: string): string {
+  if (locale === "zh-Hant") return "目前使用本機教練句庫，不會呼叫外部 AI。";
+  if (locale === "ja") return "現在は定型コーチを使用中。外部AIには接続しません。";
+  return "Using the built-in coach phrases; no external AI call is made.";
 }

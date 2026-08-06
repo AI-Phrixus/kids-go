@@ -1,25 +1,37 @@
 {
   "name": "kids-go",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "private": true,
   "description": "Kids Igo — children's Go learning game (Cloudflare Free)",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "dev": "npm run build:web && wrangler dev",
-    "dev:api": "wrangler dev",
+    "dev": "npm run build:web && wrangler dev --config wrangler.local.toml",
+    "dev:api": "wrangler dev --config wrangler.local.toml",
+    "dev:cloudflare": "npm run build:web && wrangler dev",
     "dev:web": "vite --config apps/web/vite.config.ts",
     "build:web": "vite build --config apps/web/vite.config.ts",
     "deploy": "npm run build:web && wrangler deploy",
-    "db:local": "wrangler d1 migrations apply kids-go --local",
+    "db:local": "wrangler d1 migrations apply kids-go --local --config wrangler.local.toml",
     "db:remote": "wrangler d1 migrations apply kids-go --remote",
-    "test:engine": "npx --yes tsx packages/go-engine/src/engine.test.ts"
+    "typecheck": "tsc -p workers/api/tsconfig.json --noEmit && tsc -p packages/go-engine/tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit",
+    "test:engine": "tsx packages/go-engine/src/engine.test.ts",
+    "test:security": "tsx workers/api/src/security.test.ts",
+    "test": "npm run typecheck && npm run test:engine && npm run test:security && npm run build:web"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250705.0",
+    "@cloudflare/workers-types": "^5.20260804.1",
+    "postcss": "^8.5.25",
+    "tsx": "^4.23.9",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
-    "wrangler": "4.24.0"
+    "wrangler": "4.119.0"
   },
   "dependencies": {
-    "hono": "^4.8.4"
+    "hono": "^4.13.0"
+  },
+  "overrides": {
+    "undici": "7.29.0"
   }
 }

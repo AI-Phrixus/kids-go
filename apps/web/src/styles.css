@@ -87,7 +87,7 @@ body::after {
 #app {
   position: relative;
   z-index: 1;
-  max-width: 720px;
+  max-width: 1060px;
   margin: 0 auto;
   padding: 1rem 1.15rem 2.5rem;
 }
@@ -196,11 +196,13 @@ label {
   border: 1.5px solid rgba(255, 255, 255, 0.95);
   border-radius: var(--radius);
   padding: 1.15rem 1.2rem;
-  margin: 0.65rem 0;
+  margin: 0.65rem auto;
+  max-width: 720px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.9) inset,
     0 12px 36px var(--shadow);
 }
+.card.game-card { max-width: none; }
 
 .tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
 .tabs button.on {
@@ -263,15 +265,22 @@ label {
 .lesson.locked .stop { background: #c0b8ac; box-shadow: none; }
 
 /* ── Go board (warm wood + soft) ── */
+.board-rule {
+  margin: 0.8rem auto 0.1rem;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
 .board {
   display: grid;
-  gap: 2px;
-  width: min(100%, 380px);
+  gap: 0;
+  width: min(100%, 520px);
   margin: 0.85rem auto;
   background:
     linear-gradient(135deg, rgba(255, 220, 160, 0.25), transparent 50%),
     linear-gradient(180deg, #e0b070, #c9955a 40%, #b8824a);
-  padding: 10px;
+  padding: clamp(10px, 3.5vw, 18px);
   border-radius: 16px;
   box-shadow:
     inset 0 0 0 3px #8b5a2b,
@@ -281,40 +290,92 @@ label {
 
 .cell {
   aspect-ratio: 1;
-  background: #e8c48a;
+  background: transparent;
   border: none;
-  border-radius: 3px;
+  border-radius: 0;
   padding: 0;
   cursor: pointer;
-  min-height: 28px;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: none;
 }
-.cell.black {
-  background: radial-gradient(circle at 32% 30%, #666, #1a1a1a 55%, #0a0a0a);
+.cell:hover:not(:disabled),
+.cell:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Every button is one legal intersection. The line segments meet at its
+   centre; edge segments stop at the first/last intersection. */
+.cell::before,
+.cell::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  background: #70451f;
+}
+.cell::before {
+  left: 0;
+  right: 0;
+  top: calc(50% - 1px);
+  height: 2px;
+}
+.cell::after {
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+}
+.cell.edge-left::before { left: 50%; }
+.cell.edge-right::before { right: 50%; }
+.cell.edge-top::after { top: 50%; }
+.cell.edge-bottom::after { bottom: 50%; }
+
+.stone {
+  position: absolute;
+  z-index: 2;
+  width: 88%;
+  aspect-ratio: 1;
   border-radius: 50%;
+  pointer-events: none;
+}
+.stone.black {
+  background: radial-gradient(circle at 32% 30%, #666, #1a1a1a 55%, #0a0a0a);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
 }
-.cell.white {
+.stone.white {
   background: radial-gradient(circle at 32% 30%, #fff, #f0f0f0 50%, #ddd);
-  border-radius: 50%;
   box-shadow: inset 0 0 0 1px #bbb, 0 2px 4px rgba(0, 0, 0, 0.12);
 }
-.cell.last {
-  box-shadow: 0 0 0 2px var(--accent), 0 0 12px rgba(224, 122, 74, 0.55);
+.cell.last .stone::after {
+  content: "";
+  position: absolute;
+  width: 22%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--accent);
+  left: 39%;
+  top: 39%;
+  box-shadow: 0 0 5px rgba(224, 122, 74, 0.7);
 }
-.cell.hoshi {
-  background-image: radial-gradient(circle, #8b5a2b 15%, transparent 16%);
+.hoshi-dot {
+  position: absolute;
+  z-index: 1;
+  width: clamp(5px, 18%, 8px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #5f3718;
+  pointer-events: none;
 }
 .cell.focus {
   outline: 3px solid var(--ok);
-  outline-offset: -2px;
+  outline-offset: -3px;
+  border-radius: 8px;
   z-index: 1;
 }
-.board:focus { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 16px; }
 
 .lib-num {
   position: absolute;
@@ -327,6 +388,30 @@ label {
 }
 .cell.black .lib-num { color: #9dffc0; text-shadow: 0 0 2px #000; }
 .cell.white .lib-num { color: var(--accent-deep); }
+
+/* Laptop-first game layout: controls remain readable beside a large board,
+   keeping the full 9x9 surface visible on common 768–900px-tall screens. */
+@media (min-width: 900px) {
+  .free-layout {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(460px, 520px);
+    gap: 1.35rem;
+    align-items: start;
+  }
+  .free-controls {
+    align-self: start;
+    padding: 0.35rem 0.2rem;
+  }
+  .free-controls .row:first-child button { flex: 1 1 7rem; }
+  .free-controls .row:nth-child(2) button { flex: 1 1 6rem; }
+  .free-options { align-items: flex-end; }
+  .board-pane .board-rule { margin-top: 0.2rem; }
+  .free-card .board {
+    width: min(100%, calc(100vh - 258px), 520px);
+    min-width: min(100%, 460px);
+    margin-top: 0.35rem;
+  }
+}
 
 /* ── Story / bubbles ── */
 .story {
@@ -469,6 +554,14 @@ input[type="url"], input[type="password"] { width: 100%; }
   box-shadow: none;
 }
 .footer a:hover, .linkish:hover { color: var(--accent); }
+#sfx-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  text-decoration: none;
+}
 
 .hero-row, .win-hero {
   display: flex;

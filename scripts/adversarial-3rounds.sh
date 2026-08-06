@@ -2,7 +2,16 @@
 # Extreme adversarial test suite — 3 rounds
 set -euo pipefail
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:$PATH"
-BASE="${1:-https://go.tdtc.indevs.in}"
+BASE="${1:-http://localhost:8787}"
+case "$BASE" in
+  http://localhost:*|http://127.0.0.1:*) ;;
+  *)
+    if [[ "${KIDS_GO_ALLOW_MUTATING_REMOTE_TESTS:-}" != "I_UNDERSTAND" ]]; then
+      echo "Refusing to mutate a remote site. Set KIDS_GO_ALLOW_MUTATING_REMOTE_TESTS=I_UNDERSTAND to continue." >&2
+      exit 2
+    fi
+    ;;
+esac
 PASS=0
 FAIL=0
 log() { echo "$*"; }
@@ -82,7 +91,7 @@ round_auth_flow() {
   log "--- auth / progress / friends ---"
   local ts A B C PIN FID
   ts=$(date +%s | tail -c 6)
-  A="a$ts"; B="b$ts"; C="c$ts"; PIN=1357
+  A="a$ts"; B="b$ts"; C="c$ts"; PIN=135790
 
   if register_quick /tmp/advA "$A" "$PIN" "zh-Hant"; then ok "register A"; else bad "register A"; cat /tmp/adv.json; echo; fi
 
@@ -91,7 +100,7 @@ round_auth_flow() {
 
   # nick taken
   curl -sS -o /tmp/adv.json -X POST "$BASE/api/auth/register/quick" -H 'Content-Type: application/json' \
-    -d "{\"nickname\":\"$A\",\"pin\":\"9999\",\"locale\":\"en\"}" >/dev/null
+    -d "{\"nickname\":\"$A\",\"pin\":\"999999\",\"locale\":\"en\"}" >/dev/null
   expect_json_field /tmp/adv.json error nickname_taken "nick taken"
 
   # skip lock
@@ -169,12 +178,12 @@ round_auth_flow() {
   python3 -c "import json;d=json.load(open('/tmp/adv.json'));assert 'say' in d or d.get('error');print('  ✓ coach responded', d.get('via') or d.get('source') or d.get('error'))" && PASS=$((PASS+1)) || bad "coach"
 
   curl -sS -o /tmp/adv.json -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-    -d "{\"mode\":\"quick\",\"nickname\":\"$A\",\"pin\":\"0000\"}" >/dev/null
+    -d "{\"mode\":\"quick\",\"nickname\":\"$A\",\"pin\":\"000000\"}" >/dev/null
   expect_json_field /tmp/adv.json error auth_failed "wrong pin"
 
   curl -sS -c /tmp/advA -b /tmp/advA -o /tmp/adv.json -X PUT "$BASE/api/settings/ai" -H 'Content-Type: application/json' \
     -d '{"provider":"openai_compatible","baseUrl":"http://evil.com","apiKey":"sk"}' >/dev/null
-  expect_json_field /tmp/adv.json error base_url_must_https "http byok blocked"
+  expect_json_field /tmp/adv.json error parent_required "quick account cannot manage byok"
 
   # remove friend then msg
   curl -sS -c /tmp/advA -b /tmp/advA -o /tmp/adv.json -X POST "$BASE/api/friends/remove" -H 'Content-Type: application/json' \

@@ -9,7 +9,7 @@ export function createOpenAICompatibleProvider(opts: {
   const isOpenRouter = base.includes("openrouter.ai");
   return {
     id: isOpenRouter ? "openrouter" : base.includes("groq.com") ? "groq" : "openai_compatible",
-    async complete(messages, { maxTokens, temperature }) {
+    async complete(messages, { maxTokens, temperature, signal }) {
       const headers: Record<string, string> = {
         Authorization: `Bearer ${opts.apiKey}`,
         "Content-Type": "application/json",
@@ -22,6 +22,8 @@ export function createOpenAICompatibleProvider(opts: {
       const res = await fetch(`${base}/chat/completions`, {
         method: "POST",
         headers,
+        signal,
+        redirect: "error",
         body: JSON.stringify({
           model: opts.model,
           messages,

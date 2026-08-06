@@ -25,20 +25,19 @@
 
 ---
 
-## 鏈路（v0.6.2 · 免費高效能優先 · 自動輪換）
+## 鏈路（v0.7.7 · 隱私優先 · 自動備援）
 
 ```text
-① Groq（Llama 3.3 70B 等 · 站點 GROQ_API_KEY）— 最高優先、最快高質免費
-② OpenRouter 免費模型輪換（openrouter/free → Nemotron/Gemma free 等）
-③ Google Gemini free（若有 GOOGLE_API_KEY）
-④ Cloudflare Workers AI（軟上限，防 Neurons 硬限）
-⑤ 使用者 BYOK（可能付費 · 僅 free 全失敗或 preferByok）
-⑥ 本地句庫 static
+① Cloudflare Workers AI（軟上限，防 Neurons 硬限）
+② Groq／OpenRouter free／Google Gemini（只在部署者已設定 Key 時備援）
+③ 家長設定的 BYOK（可能付費；或由家長明確勾選優先）
+④ 本地句庫 static
 ```
 
 - 同提供商內模型按 **UTC 小時** 旋轉起點，分散 rate limit。  
 - 站點 OpenRouter **不會**自動選 `openai/gpt-4o` 等付費 slug（除非你自行改 secret 為付費模型）。  
-- 環境變數 `COACH_CHAIN_MODE=cf_first` 可恢復舊的 CF 優先。
+- 對任何外部 AI 都使用通用稱呼，不傳送孩子暱稱。
+- 只有部署者明確設定 `COACH_CHAIN_MODE=free_first` 才會改為外部免費額優先。
 
 ---
 

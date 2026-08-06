@@ -9,9 +9,14 @@ import {
   setSessionChild,
 } from "../session";
 import { sanitizeNickname } from "../sanitize";
+import { clearLoginFailures, loginAllowed, recordLoginFailure } from "../login-throttle";
+import { verifyParentAccess } from "../parent-auth";
+import { consumeDailyQuota } from "../daily-quota";
 import type { Env, Locale } from "../types";
 
 const auth = new Hono<{ Bindings: Env }>();
+const MAX_CHILDREN_PER_PARENT = 5;
+const MAX_PASSWORD_LEN = 128;
 
 function setSessionHeader(c: { req: { raw: Request }; header: (k: string, v: string) => void }, sid: string) {
   const secure = cookieSecureFromRequest(c.req.raw);
@@ -36,21 +41,36 @@ function okLocale(v: unknown): Locale {
   return v === "ja" || v === "zh-Hant" || v === "en" ? v : "ja";
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return Boolean(v) && typeof v === "object" && !Array.isArray(v);
+}
+
 auth.post("/register/parent", async (c) => {
   const ip = c.req.header("cf-connecting-ip") || "local";
   // Shared NAT (school/home) may share one IP — keep soft but not too tight
   if (!rateLimit(`reg:${ip}`, 30, 60_000)) return c.json({ error: "rate_limited" }, 429);
-  const body = await c.req.json<{
-    email?: string;
-    password?: string;
-    childNickname?: string;
-    locale?: string;
-  }>();
+  let body: { email?: string; password?: string; childNickname?: string; locale?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!isRecord(body)) return c.json({ error: "invalid_json" }, 400);
+  if (!(await consumeDailyQuota(c.env.DB, `register:${ip}`, 100))) {
+    return c.json({ error: "daily_limit" }, 429);
+  }
   const email = (body.email ?? "").trim().toLowerCase();
   const password = body.password ?? "";
   const nick = sanitizeNickname(body.childNickname);
   const locale = okLocale(body.locale);
-  if (!email || password.length < 6 || !nick || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (
+    !email ||
+    email.length > 254 ||
+    password.length < 6 ||
+    password.length > MAX_PASSWORD_LEN ||
+    !nick ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
     return c.json({ error: "invalid_input" }, 400);
   }
   const exists = await c.env.DB.prepare("SELECT id FROM users WHERE email = ?")
@@ -85,12 +105,21 @@ auth.post("/register/parent", async (c) => {
 auth.post("/register/quick", async (c) => {
   const ip = c.req.header("cf-connecting-ip") || "local";
   if (!rateLimit(`reg:${ip}`, 30, 60_000)) return c.json({ error: "rate_limited" }, 429);
-  const body = await c.req.json<{ nickname?: string; pin?: string; locale?: string }>();
+  let body: { nickname?: string; pin?: string; locale?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!isRecord(body)) return c.json({ error: "invalid_json" }, 400);
+  if (!(await consumeDailyQuota(c.env.DB, `register:${ip}`, 100))) {
+    return c.json({ error: "daily_limit" }, 429);
+  }
   const nick = sanitizeNickname(body.nickname);
   const pin = (body.pin ?? "").trim();
   const locale = okLocale(body.locale);
-  if (!nick || !/^\d{4,6}$/.test(pin)) {
-    return c.json({ error: "invalid_input", hint: "nickname + 4-6 digit pin" }, 400);
+  if (!nick || !/^\d{6}$/.test(pin)) {
+    return c.json({ error: "invalid_input", hint: "nickname + 6 digit pin" }, 400);
   }
   const taken = await c.env.DB.prepare(
     `SELECT id FROM users WHERE kind = 'quick' AND display_name = ?`,
@@ -124,24 +153,39 @@ auth.post("/register/quick", async (c) => {
 auth.post("/login", async (c) => {
   const ip = c.req.header("cf-connecting-ip") || "local";
   if (!rateLimit(`login:${ip}`, 40, 60_000)) return c.json({ error: "rate_limited" }, 429);
-  const body = await c.req.json<{
+  let body: {
     mode?: "parent" | "quick";
     email?: string;
     password?: string;
     nickname?: string;
     pin?: string;
-  }>();
+  };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!isRecord(body)) return c.json({ error: "invalid_json" }, 400);
   if (body.mode === "quick") {
     const nick = (body.nickname ?? "").trim();
     const pin = (body.pin ?? "").trim();
+    if (!sanitizeNickname(nick) || !/^\d{4,6}$/.test(pin)) {
+      return c.json({ error: "auth_failed" }, 401);
+    }
+    const subject = `quick-login:${nick.toLocaleLowerCase()}`;
+    if (!(await loginAllowed(c.env.DB, subject))) {
+      return c.json({ error: "rate_limited" }, 429);
+    }
     const user = await c.env.DB.prepare(
       `SELECT id, pin_hash FROM users WHERE kind = 'quick' AND display_name = ?`,
     )
       .bind(nick)
       .first<{ id: string; pin_hash: string }>();
     if (!user?.pin_hash || !(await verifyPin(pin, user.pin_hash))) {
+      await recordLoginFailure(c.env.DB, subject);
       return c.json({ error: "auth_failed" }, 401);
     }
+    await clearLoginFailures(c.env.DB, subject);
     const child = await c.env.DB.prepare(
       "SELECT id FROM children WHERE user_id = ? ORDER BY created_at LIMIT 1",
     )
@@ -154,14 +198,23 @@ auth.post("/login", async (c) => {
 
   const email = (body.email ?? "").trim().toLowerCase();
   const password = body.password ?? "";
+  if (email.length > 254 || password.length > MAX_PASSWORD_LEN) {
+    return c.json({ error: "auth_failed" }, 401);
+  }
+  const subject = `parent-login:${email}`;
+  if (!(await loginAllowed(c.env.DB, subject))) {
+    return c.json({ error: "rate_limited" }, 429);
+  }
   const user = await c.env.DB.prepare(
     `SELECT id, password_hash FROM users WHERE kind = 'parent' AND email = ?`,
   )
     .bind(email)
     .first<{ id: string; password_hash: string }>();
   if (!user?.password_hash || !(await verifyPassword(password, user.password_hash))) {
+    await recordLoginFailure(c.env.DB, subject);
     return c.json({ error: "auth_failed" }, 401);
   }
+  await clearLoginFailures(c.env.DB, subject);
   const child = await c.env.DB.prepare(
     "SELECT id FROM children WHERE user_id = ? ORDER BY created_at LIMIT 1",
   )
@@ -199,7 +252,23 @@ auth.get("/me", async (c) => {
 auth.post("/children", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
   if (!sess) return c.json({ error: "unauthorized" }, 401);
-  const body = await c.req.json<{ nickname?: string; locale?: string }>();
+  if (sess.user.kind !== "parent") return c.json({ error: "parent_required" }, 403);
+  const count = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM children WHERE user_id = ?")
+    .bind(sess.user.id)
+    .first<{ n: number }>();
+  if ((Number(count?.n) || 0) >= MAX_CHILDREN_PER_PARENT) {
+    return c.json({ error: "child_limit" }, 400);
+  }
+  let body: { nickname?: string; locale?: string; parentPassword?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!isRecord(body)) return c.json({ error: "invalid_json" }, 400);
+  if (!(await verifyParentAccess(c.env, sess, body.parentPassword))) {
+    return c.json({ error: "parent_verification_required" }, 403);
+  }
   const nick = sanitizeNickname(body.nickname);
   if (!nick) return c.json({ error: "invalid_input" }, 400);
   const locale = okLocale(body.locale ?? sess.user.preferred_locale);
@@ -222,7 +291,13 @@ auth.post("/children", async (c) => {
 auth.patch("/locale", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
   if (!sess) return c.json({ error: "unauthorized" }, 401);
-  const body = await c.req.json<{ locale?: string }>();
+  let body: { locale?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (!isRecord(body)) return c.json({ error: "invalid_json" }, 400);
   const locale = okLocale(body.locale);
   await c.env.DB.prepare(`UPDATE users SET preferred_locale = ? WHERE id = ?`)
     .bind(locale, sess.user.id)
@@ -238,6 +313,18 @@ auth.patch("/locale", async (c) => {
 auth.post("/children/:id/select", async (c) => {
   const sess = await loadSession(c.env, c.req.header("Cookie"));
   if (!sess) return c.json({ error: "unauthorized" }, 401);
+  if (sess.user.kind === "parent") {
+    let body: { parentPassword?: string };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid_json" }, 400);
+    }
+    if (!isRecord(body)) return c.json({ error: "invalid_json" }, 400);
+    if (!(await verifyParentAccess(c.env, sess, body.parentPassword))) {
+      return c.json({ error: "parent_verification_required" }, 403);
+    }
+  }
   const id = c.req.param("id");
   const child = await c.env.DB.prepare(
     "SELECT id FROM children WHERE id = ? AND user_id = ?",

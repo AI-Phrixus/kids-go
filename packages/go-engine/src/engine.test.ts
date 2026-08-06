@@ -37,18 +37,42 @@ function boardWith(
   assert(c!.toPlay === "white", "turn flips after play");
 }
 
-// multi-stone capture
+// Intersections at corner/edge/centre have 2/3/4 orthogonal liberties.
+{
+  const corner = boardWith([{ x: 0, y: 0, c: "black" }]);
+  const edge = boardWith([{ x: 4, y: 0, c: "black" }]);
+  const centre = boardWith([{ x: 4, y: 4, c: "black" }]);
+  assert(groupLiberties(corner, 0, 0) === 2, "corner intersection has two liberties");
+  assert(groupLiberties(edge, 4, 0) === 3, "edge intersection has three liberties");
+  assert(groupLiberties(centre, 4, 4) === 4, "centre intersection has four liberties");
+}
+
+// Corner capture: occupying both adjacent intersections removes the stone.
+{
+  const before = boardWith(
+    [
+      { x: 0, y: 0, c: "white" },
+      { x: 1, y: 0, c: "black" },
+    ],
+    "black",
+  );
+  const after = tryPlay(before, 0, 1);
+  assert(after?.grid[idx(9, 0, 0)] === null, "corner stone captured at zero liberties");
+  assert(after?.captured.black === 1, "corner capture count");
+}
+
+// Connected two-stone edge group is captured as one group.
 {
   const b = boardWith([
+    { x: 0, y: 0, c: "white" },
     { x: 1, y: 0, c: "white" },
-    { x: 2, y: 0, c: "white" },
-    { x: 0, y: 0, c: "black" },
+    { x: 0, y: 1, c: "black" },
     { x: 1, y: 1, c: "black" },
-    { x: 2, y: 1, c: "black" },
-    { x: 3, y: 0, c: "black" },
-  ]);
-  // white two-stone group on first row has liberty only at… wait, need shape carefully
-  // Corner two stones: white at (0,0)(1,0), black surrounds with play at (0,1) after setup
+  ], "black");
+  const after = tryPlay(b, 2, 0);
+  assert(after?.grid[idx(9, 0, 0)] === null, "first connected stone removed");
+  assert(after?.grid[idx(9, 1, 0)] === null, "second connected stone removed");
+  assert(after?.captured.black === 2, "connected group capture count");
 }
 
 // suicide illegal
@@ -79,6 +103,7 @@ assert(tryPlay(createEmptyBoard(9), 0, 9) === null, "oob y");
 
 // empty board 81 moves
 assert(listLegalMoves(createEmptyBoard(9)).length === 81, "81 empties");
+assert(tryPlay(createEmptyBoard(9), 0, 0)?.grid[idx(9, 0, 0)] === "black", "corner intersection is playable");
 
 // AI returns something at all levels
 for (const lv of [0, 1, 2] as const) {
@@ -87,48 +112,23 @@ for (const lv of [0, 1, 2] as const) {
 }
 
 // classic single-stone ko
-// Shape (white to recapture would be ko):
-//   . B W .
-//   B W * B   (* = black just captured white by playing)
-//   . B W .
-// Build: black surrounds a white single stone and captures it; white cannot immediately recapture.
+// Before black plays * at (1,2):
+//   . B . .
+//   B W B .
+//   W * W .
+//   . W . .
+// Black captures W at (1,1); the new black stone has only that point as a
+// liberty, so an immediate white recapture would repeat the position.
 {
-  // White stone at (2,2) with one liberty at (2,1)
-  // Black: (1,2)(3,2)(2,3) and will play (2,1)
-  const before = boardWith(
-    [
-      { x: 1, y: 2, c: "black" },
-      { x: 3, y: 2, c: "black" },
-      { x: 2, y: 3, c: "black" },
-      { x: 2, y: 2, c: "white" },
-      // prevent snapback multi-lib: also surround white helpers so only single capture
-      { x: 1, y: 1, c: "white" },
-      { x: 3, y: 1, c: "white" },
-      { x: 2, y: 0, c: "white" },
-    ],
-    "black",
-  );
-  // For clean ko: white single stone, black fills last liberty
-  const clean = boardWith(
-    [
-      { x: 1, y: 1, c: "black" },
-      { x: 2, y: 0, c: "black" },
-      { x: 3, y: 1, c: "black" },
-      { x: 2, y: 2, c: "black" },
-      { x: 2, y: 1, c: "white" },
-    ],
-    "black",
-  );
-  // White at (2,1): liberties are (1,1? black),(3,1 black),(2,0 black),(2,2 black) — 0 libs already?
-  // Need white with exactly 1 liberty
-  // Standard:
-  // B at (1,0)(0,1)(2,1), W at (1,1), liberty at (1,2) empty, black plays (1,2)
   const koSetup = boardWith(
     [
       { x: 1, y: 0, c: "black" },
       { x: 0, y: 1, c: "black" },
       { x: 2, y: 1, c: "black" },
       { x: 1, y: 1, c: "white" },
+      { x: 0, y: 2, c: "white" },
+      { x: 2, y: 2, c: "white" },
+      { x: 1, y: 3, c: "white" },
     ],
     "black",
   );
@@ -147,8 +147,28 @@ for (const lv of [0, 1, 2] as const) {
   const whiteElse = tryPlay(afterCap!, 5, 5);
   assert(whiteElse, "white plays elsewhere");
   assert(whiteElse!.ko === null, "ko cleared after non-ko play");
-  void before;
-  void clean;
+  const blackElse = tryPlay(whiteElse!, 6, 6);
+  assert(blackElse, "black answers elsewhere");
+  const delayedRecapture = tryPlay(blackElse!, 1, 1);
+  assert(delayedRecapture, "ko recapture is legal after an intervening move");
+  assert(delayedRecapture!.grid[idx(9, 1, 2)] === null, "delayed ko recapture removes stone");
+}
+
+// Capturing one stone does not create ko if the new stone has multiple liberties.
+{
+  const notKo = boardWith(
+    [
+      { x: 1, y: 0, c: "black" },
+      { x: 0, y: 1, c: "black" },
+      { x: 2, y: 1, c: "black" },
+      { x: 1, y: 1, c: "white" },
+    ],
+    "black",
+  );
+  const after = tryPlay(notKo, 1, 2);
+  assert(after?.captured.black === 1, "single stone captured in non-ko shape");
+  assert(groupLiberties(after!, 1, 2) > 1, "new stone should have multiple liberties");
+  assert(after?.ko === null, "non-repeating single capture incorrectly marked as ko");
 }
 
 // capture race helper

@@ -20,7 +20,7 @@ const ZH: GuideSection[] = [
     html: `
       <p>Kids Igo 是給約 10～11 歲小朋友的<strong>圍棋啟蒙遊戲</strong>，用《西遊記》取經路學戰略思維，也照顧眼睛與坐姿。</p>
       <ul>
-        <li><strong>快速註冊</strong>：暱稱 + 4～6 位數字 PIN（請家長幫忙記住）。</li>
+        <li><strong>快速註冊</strong>：暱稱 + 6 位數字 PIN（請家長幫忙記住；舊帳號仍可用原本的 4～6 位 PIN 登入）。</li>
         <li><strong>家長註冊</strong>：郵箱 + 密碼 + 孩子暱稱，方便看進度摘要。</li>
         <li>暱稱不能含特殊符號（&lt; &gt; 等），以保護安全。</li>
         <li>語言可在右上角切換：日本語／繁中／English。</li>
@@ -124,7 +124,7 @@ const JA: GuideSection[] = [
     html: `
       <p>Kids Igo は 10〜11 歳向けの<strong>囲碁入門ゲーム</strong>。西遊記の旅で戦略を学び、目と姿勢も大切にします。</p>
       <ul>
-        <li><strong>かんたん登録</strong>：なまえ + 4〜6桁 PIN（保護者と一緒に覚えてね）。</li>
+        <li><strong>かんたん登録</strong>：なまえ + 6桁 PIN（保護者と一緒に覚えてね。既存アカウントは元の4〜6桁でログインできます）。</li>
         <li><strong>保護者登録</strong>：メール + パスワード + 子どものなまえ。</li>
         <li>なまえに &lt; &gt; などの記号は使えません。</li>
         <li>右上で 日本語／繁中／English を切り替え。</li>
@@ -219,7 +219,7 @@ const EN: GuideSection[] = [
     html: `
       <p>Kids Igo is a <strong>Go starter game</strong> for ages ~10–11, wrapped in Journey to the West — strategy, eyes, and comfy posture.</p>
       <ul>
-        <li><strong>Quick sign-up</strong>: nickname + 4–6 digit PIN (parents help remember).</li>
+        <li><strong>Quick sign-up</strong>: nickname + a 6-digit PIN (parents help remember; existing accounts can still log in with their original 4–6 digits).</li>
         <li><strong>Parent sign-up</strong>: email + password + child nickname for progress summary.</li>
         <li>No special markup characters in nicknames (&lt; &gt; …).</li>
         <li>Switch language top-right: Japanese / Traditional Chinese / English.</li>

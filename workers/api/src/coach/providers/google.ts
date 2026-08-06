@@ -7,7 +7,7 @@ export function createGoogleProvider(opts: {
 }): CoachProvider {
   return {
     id: "google",
-    async complete(messages: ChatMessage[], { maxTokens, temperature }) {
+    async complete(messages: ChatMessage[], { maxTokens, temperature, signal }) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent?key=${opts.apiKey}`;
       const contents = messages
         .filter((m) => m.role !== "system")
@@ -29,6 +29,8 @@ export function createGoogleProvider(opts: {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal,
+        redirect: "error",
         body: JSON.stringify(body),
       });
       if (!res.ok) {

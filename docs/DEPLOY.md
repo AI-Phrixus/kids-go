@@ -3,7 +3,7 @@
 ## 前提
 
 - Cloudflare 帳號（**Workers Free**）
-- 本機 Node 20+、`npm`、`wrangler`（專案 devDependency）
+- 本機 Node 22+、`npm`、`wrangler`（專案 devDependency）
 - **不要**開 Workers AI 付費路徑
 
 ## 一鍵流程

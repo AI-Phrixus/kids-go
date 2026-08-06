@@ -71,8 +71,9 @@ export async function loadSession(
       preferred_locale: string;
     }>();
 
-  if (!row || row.expires_at < Date.now()) {
-    if (sid) await env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(sid).run();
+  if (!row) return null;
+  if (row.expires_at < Date.now()) {
+    await env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(sid).run();
     return null;
   }
 

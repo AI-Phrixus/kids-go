@@ -1,7 +1,7 @@
 # Kids Igo 交接手冊（新帳號／新 AI 接手必讀）
 
-> 版本：**v0.7.5**  
-> 最後更新：2026-07-24  
+> 版本：**v0.7.7**
+> 最後更新：2026-08-06
 > 目的：在**不依賴舊對話**的情況下接續開發與部署。
 
 ---
@@ -14,7 +14,7 @@
 - 故事：《西遊記》取經路包裝教程與休息  
 - 每課教程後人機（弱 AI）；進度雲端（D1）  
 - 護眼休息（20–20–20 + 角色儀式）  
-- 教練：free_first（Groq → OpenRouter free → Gemini free → CF soft → 句庫）  
+- 教練：隱私優先 cf_first（CF soft → 已設定免費額／家長 BYOK → 句庫；外部請求不含孩子暱稱）
 - 好友：暱稱互加 + 短訊 + 邀請分享；可選暗號任務；姿勢小提示  
 - 站內「遊戲說明」完整教程（`apps/web/src/guide.ts`）  
 - Secrets：`GROQ_API_KEY` / `OPENROUTER_API_KEY` / `GOOGLE_API_KEY`（見 [FREE-AI.md](./FREE-AI.md)）  
@@ -58,7 +58,7 @@ D1 `kids-go` id：`35d8acbd-2abd-4a68-b62e-88dfa1f0fd0d`
 3. 讀 **STORY-XIYOU.md** · **LEARNING-SCIENCE.md** · **EYECARE.md**（產品憲法）  
 4. 讀 **ARCHITECTURE.md** · **COACH-PROVIDERS.md**  
 5. 本機 `cp .env.example .env`（Key 向操作者私有目錄索取，**不要猜**）  
-6. 小步改碼 → commit → **立即 push**  
+6. `npm test` + `scripts/local-smoke.sh` 驗證後再提交
 
 **禁止**把聊天記錄當真相源。
 
@@ -80,12 +80,13 @@ D1 `kids-go` id：`35d8acbd-2abd-4a68-b62e-88dfa1f0fd0d`
 
 ```bash
 cd kids-go
-cp .env.example .env
-pnpm install   # 或 npm install
-# pnpm dev / wrangler dev — 以 package.json 為準
+npm install
+npm run db:local
+npm run dev
+# 開啟 http://localhost:8787；本機教練使用內建句庫，不需 Cloudflare 登入
 ```
 
-健康檢查（規劃）：`GET /api/health` → `{ ok: true, version: "..." }`
+健康檢查：`GET /api/health` → `{ ok: true, version: "..." }`
 
 ---
 

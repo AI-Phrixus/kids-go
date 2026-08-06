@@ -124,7 +124,12 @@ export function tryPlay(state: BoardState, x: number, y: number): BoardState | n
         }
       }
     }
-    if (ourSize === 1) next.ko = `${only.x},${only.y}`;
+    // A true simple-ko recapture exists only when the new single stone itself
+    // has exactly one liberty. Otherwise forbidding the vacated point would
+    // reject a legal non-repeating move.
+    if (ourSize === 1 && groupLiberties(next, x, y) === 1) {
+      next.ko = `${only.x},${only.y}`;
+    }
   }
 
   next.toPlay = opp;

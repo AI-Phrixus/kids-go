@@ -1,5 +1,5 @@
 import type { AiConfig } from "../ai-config";
-import { EMPTY_AI_CONFIG } from "../ai-config";
+import { EMPTY_AI_CONFIG, isSafeAiBaseUrl } from "../ai-config";
 import type { CoachRequest, CoachResponse } from "./contract";
 import {
   buildFreeFirstSlots,
@@ -19,9 +19,11 @@ import {
   setAlert,
   shouldSkipWorkersAi,
   softMaxCalls,
+  staticCoachStatusMessage,
   utcDay,
 } from "./quota";
 import { staticCoach } from "./staticPhrases";
+import type { CoachProvider } from "./providers/types";
 
 export interface CoachEnv {
   DB?: D1Database;
@@ -32,7 +34,7 @@ export interface CoachEnv {
   COACH_TEMPERATURE?: string;
   COACH_CF_SOFT_MAX_CALLS?: string;
   COACH_CF_MODEL?: string;
-  /** Prefer free high-perf first (default). Set "cf_first" to restore CF→free order. */
+  /** Privacy-first default is Cloudflare first. Set "free_first" to opt into external free tiers first. */
   COACH_CHAIN_MODE?: string;
   AI_BASE_URL?: string;
   AI_API_KEY?: string;
@@ -48,7 +50,7 @@ export interface CoachEnv {
 
 /**
  * Merge env + user BYOK credentials.
- * Default free-first: Groq → OpenRouter free → Gemini free → CF soft → user BYOK → static
+ * Default CF-first: CF soft → configured free tiers / user BYOK → static
  */
 export function buildEffectiveEnv(env: CoachEnv, userCfg?: AiConfig | null): {
   env: CoachEnv;
@@ -57,7 +59,11 @@ export function buildEffectiveEnv(env: CoachEnv, userCfg?: AiConfig | null): {
   forceWorkersOnly: boolean;
   freeFirst: boolean;
 } {
-  const u = userCfg ?? EMPTY_AI_CONFIG;
+  const candidate = userCfg ?? EMPTY_AI_CONFIG;
+  const u =
+    candidate.baseUrl && !isSafeAiBaseUrl(candidate.baseUrl)
+      ? { ...candidate, baseUrl: "", apiKey: "", preferByok: false }
+      : candidate;
   const hasUserByok = Boolean(u.apiKey || u.baseUrl);
   const preferByok = Boolean(u.preferByok && hasUserByok);
   const forceNone =
@@ -65,7 +71,7 @@ export function buildEffectiveEnv(env: CoachEnv, userCfg?: AiConfig | null): {
   const forceWorkersOnly =
     !preferByok &&
     (u.provider === "workers_ai" || (env.COACH_PROVIDER || "").toLowerCase() === "workers_ai");
-  const freeFirst = (env.COACH_CHAIN_MODE || "free_first").toLowerCase() !== "cf_first";
+  const freeFirst = (env.COACH_CHAIN_MODE || "cf_first").toLowerCase() === "free_first";
 
   const merged: CoachEnv = {
     ...env,
@@ -120,12 +126,21 @@ async function completeWithTimeout(
   temperature: number,
   timeoutMs: number,
 ): Promise<string> {
-  return Promise.race([
-    provider.complete(messages, { maxTokens, temperature }),
-    new Promise<string>((_, rej) =>
-      setTimeout(() => rej(new Error("coach timeout")), timeoutMs),
-    ),
-  ]);
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      provider.complete(messages, { maxTokens, temperature, signal: controller.signal }),
+      new Promise<string>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error("coach timeout"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export type CoachStatus = {
@@ -203,9 +218,11 @@ export async function getCoachStatus(
     preferByok,
     freeFirst,
     alert: q.last_alert,
-    reminder: quotaStatusMessage(q, maxCalls, locale),
+    reminder: forceNone
+      ? staticCoachStatusMessage(locale)
+      : quotaStatusMessage(q, maxCalls, locale),
     billingNote:
-      "Default free-first: Groq 70B → OpenRouter free → Gemini free → CF soft-capped → user BYOK → static. Never auto-picks paid OpenRouter models on site secrets.",
+      "Default privacy-first: CF soft-capped → configured free tiers / user BYOK → static. External AI receives an anonymized child name. Never auto-picks paid OpenRouter models on site secrets.",
   };
 }
 
@@ -299,9 +316,16 @@ export async function runCoach(
   const day = utcDay();
   const maxCalls = softMaxCalls(effective);
 
+  // Keep the child's nickname in local static phrases, but never send it to an
+  // AI provider. Providers receive only a locale-appropriate generic name.
+  const externalReq: CoachRequest = {
+    ...req,
+    childName: req.locale === "ja" ? "きみ" : req.locale === "zh-Hant" ? "小朋友" : "friend",
+  };
+
   const messages = [
-    { role: "system" as const, content: buildSystemPrompt(req) },
-    { role: "user" as const, content: buildUserPrompt(req) },
+    { role: "system" as const, content: buildSystemPrompt(externalReq) },
+    { role: "user" as const, content: buildUserPrompt(externalReq) },
   ];
 
   const chainLabel = forceNone
@@ -314,7 +338,12 @@ export async function runCoach(
 
   if (forceNone) {
     if (env.DB) await bumpQuota(env.DB, day, "static_fallback").catch(() => undefined);
-    return { ...fallback, reminder: "static only", chain: chainLabel, via: "static" };
+    return {
+      ...fallback,
+      reminder: staticCoachStatusMessage(req.locale),
+      chain: chainLabel,
+      via: "static",
+    };
   }
 
   const quota = env.DB ? await getQuota(env.DB, day).catch(() => null) : null;
@@ -362,7 +391,7 @@ export async function runCoach(
     };
   }
 
-  // —— free_first (default): high-perf free → CF soft → paid BYOK → static ——
+  // —— optional free_first: high-perf free → CF soft → paid BYOK → static ——
   if (freeFirst) {
     // 1) free high-perf (Groq, OpenRouter free, Gemini free)
     const freeHit = await tryFreeSlots("free");
@@ -392,7 +421,7 @@ export async function runCoach(
     const byokHit = await tryFreeSlots("byok");
     if (byokHit) return byokHit;
   } else {
-    // legacy cf_first
+    // default cf_first
     const cf = await tryCloudflare(
       effective,
       messages,

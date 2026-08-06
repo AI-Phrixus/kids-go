@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { uid } from "../crypto";
+import { consumeDailyQuota } from "../daily-quota";
 import { sanitizeNickname } from "../sanitize";
 import { loadSession } from "../session";
 import type { Env } from "../types";
@@ -146,7 +147,9 @@ friends.post("/friends/add", async (c) => {
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
   if (!rateOk(`fadd:${sess.child.id}`, 15)) return c.json({ error: "rate_limited" }, 429);
 
-  const body = await c.req.json<{ nickname?: string }>().catch(() => ({}));
+  const body: { nickname?: string } = await c.req
+    .json<{ nickname?: string }>()
+    .catch(() => ({}));
   const nick = sanitizeNickname(body.nickname);
   if (!nick) return c.json({ error: "invalid_input" }, 400);
 
@@ -207,7 +210,9 @@ friends.post("/friends/add", async (c) => {
 friends.post("/friends/accept", async (c) => {
   const sess = await requireChild(c);
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
-  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}));
+  const body: { friendshipId?: string } = await c.req
+    .json<{ friendshipId?: string }>()
+    .catch(() => ({}));
   const fid = String(body.friendshipId || "");
   if (!fid) return c.json({ error: "invalid_input" }, 400);
 
@@ -247,7 +252,9 @@ friends.post("/friends/accept", async (c) => {
 friends.post("/friends/remove", async (c) => {
   const sess = await requireChild(c);
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
-  const body = await c.req.json<{ friendshipId?: string }>().catch(() => ({}));
+  const body: { friendshipId?: string } = await c.req
+    .json<{ friendshipId?: string }>()
+    .catch(() => ({}));
   const fid = String(body.friendshipId || "");
   const me = sess.child.id;
   const row = await c.env.DB.prepare(
@@ -281,7 +288,6 @@ friends.get("/friends/messages", async (c) => {
   if (!fr || (fr.child_lo !== me && fr.child_hi !== me) || fr.status !== "accepted") {
     return c.json({ error: "not_friends" }, 403);
   }
-
   const since = Number(c.req.query("since") || 0) || 0;
   const rows = await c.env.DB.prepare(
     `SELECT id, from_child_id, body, created_at FROM friend_messages
@@ -308,7 +314,9 @@ friends.post("/friends/messages", async (c) => {
   if (!sess?.child) return c.json({ error: "unauthorized" }, 401);
   if (!rateOk(`fmsg:${sess.child.id}`, 30)) return c.json({ error: "rate_limited" }, 429);
 
-  const body = await c.req.json<{ friendshipId?: string; body?: string }>().catch(() => ({}));
+  const body: { friendshipId?: string; body?: string } = await c.req
+    .json<{ friendshipId?: string; body?: string }>()
+    .catch(() => ({}));
   const fid = String(body.friendshipId || "");
   const text = sanitizeMessage(body.body);
   if (!fid || !text) return c.json({ error: "invalid_message" }, 400);
@@ -321,6 +329,9 @@ friends.post("/friends/messages", async (c) => {
     .first<{ id: string; child_lo: string; child_hi: string; status: string }>();
   if (!fr || (fr.child_lo !== me && fr.child_hi !== me) || fr.status !== "accepted") {
     return c.json({ error: "not_friends" }, 403);
+  }
+  if (!(await consumeDailyQuota(c.env.DB, `friend-msg:${me}`, 300))) {
+    return c.json({ error: "daily_limit" }, 429);
   }
 
   const id = uid();

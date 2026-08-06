@@ -22,9 +22,9 @@ const MAP: Record<string, Record<Locale, string>> = {
     en: "Too many tries. Please wait a moment.",
   },
   invalid_input: {
-    ja: "入力を確認してね（PINは4〜6桁の数字）。",
-    "zh-Hant": "請檢查輸入（PIN 為 4～6 位數字）。",
-    en: "Check your input (PIN must be 4–6 digits).",
+    ja: "入力を確認してね（新しいPINは6桁の数字）。",
+    "zh-Hant": "請檢查輸入（新 PIN 為 6 位數字）。",
+    en: "Check your input (a new PIN must be 6 digits).",
   },
   locked: {
     ja: "まだロック中。前の駅をクリアしてね。",
@@ -36,10 +36,30 @@ const MAP: Record<string, Record<Locale, string>> = {
     "zh-Hant": "請重新登入。",
     en: "Please log in again.",
   },
+  parent_required: {
+    ja: "この機能は保護者アカウントで使えます。",
+    "zh-Hant": "此功能只供家長帳號使用。",
+    en: "This feature is for parent accounts.",
+  },
+  parent_verification_required: {
+    ja: "保護者パスワードを確認できませんでした。もう一度試してください。",
+    "zh-Hant": "家長密碼驗證失敗，請再試一次。",
+    en: "The parent password could not be verified. Please try again.",
+  },
+  daily_limit: {
+    ja: "今日の利用上限に達しました。明日また試してね。",
+    "zh-Hant": "今天的使用次數已達上限，請明天再試。",
+    en: "Today's usage limit has been reached. Please try again tomorrow.",
+  },
   base_url_must_https: {
     ja: "Base URL は https:// で始めてね。",
     "zh-Hant": "Base URL 必須以 https:// 開頭。",
     en: "Base URL must start with https://.",
+  },
+  unsafe_base_url: {
+    ja: "安全のため、ローカル／プライベートな Base URL は使えません。",
+    "zh-Hant": "為了安全，不能使用本機或私人網路的 Base URL。",
+    en: "For safety, local and private-network Base URLs are not allowed.",
   },
   friend_not_found: {
     ja: "そのなまえの行者は見つからないよ。つづりを確認してね。",

@@ -4,7 +4,7 @@ export type AiConfig = {
   /**
    * byokKind: how to call third-party when CF free is exhausted / skipped
    * - auto | openai_compatible | xai | google
-   * Chain mode is ALWAYS CF-first unless preferByok or forceNone.
+   * Chain mode is CF-first by default unless preferByok or forceNone.
    */
   provider: string;
   baseUrl: string;
@@ -21,6 +21,59 @@ export const EMPTY_AI_CONFIG: AiConfig = {
   model: "",
   preferByok: false,
 };
+
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return false;
+  const octets = parts.map(Number);
+  if (octets.some((part) => part < 0 || part > 255)) return true;
+  const [a, b] = octets;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a >= 224
+  );
+}
+
+/** Reject local/private destinations before the Worker makes a user-configured request. */
+export function isSafeAiBaseUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+    const isIpv6 = hostname.includes(":");
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      !hostname ||
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local") ||
+      hostname.endsWith(".internal") ||
+      (isIpv6 &&
+        (hostname === "::1" ||
+          hostname.startsWith("fc") ||
+          hostname.startsWith("fd") ||
+          hostname.startsWith("fe8") ||
+          hostname.startsWith("fe9") ||
+          hostname.startsWith("fea") ||
+          hostname.startsWith("feb"))) ||
+      isPrivateIpv4(hostname)
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function parseAiConfig(raw: string | null | undefined): AiConfig {
   if (!raw) return { ...EMPTY_AI_CONFIG };
@@ -48,10 +101,10 @@ export function publicAiConfig(cfg: AiConfig) {
     preferByok: cfg.preferByok,
     hasApiKey: key.length > 0,
     apiKeyHint: key.length > 4 ? `••••${key.slice(-4)}` : key ? "••••" : "",
-    /** UI copy: chain is always CF-first unless preferByok */
+    /** UI copy: privacy-first chain unless the parent explicitly prefers BYOK. */
     chain: cfg.preferByok
       ? "byok → static"
-      : "cloudflare_free → byok → static",
+      : "cloudflare_free → configured_free/byok → static",
   };
 }
 
@@ -59,12 +112,17 @@ export function mergeAiConfig(
   prev: AiConfig,
   patch: Partial<AiConfig> & { clearApiKey?: boolean },
 ): AiConfig {
+  const nextProvider =
+    patch.provider !== undefined ? String(patch.provider).toLowerCase() : prev.provider;
+  const nextBaseUrl =
+    patch.baseUrl !== undefined ? String(patch.baseUrl).trim().replace(/\/+$/, "") : prev.baseUrl;
+  const destinationChanged = nextProvider !== prev.provider || nextBaseUrl !== prev.baseUrl;
   const next: AiConfig = {
-    provider: patch.provider !== undefined ? String(patch.provider) : prev.provider,
-    baseUrl: patch.baseUrl !== undefined ? String(patch.baseUrl).trim() : prev.baseUrl,
+    provider: nextProvider,
+    baseUrl: nextBaseUrl,
     model: patch.model !== undefined ? String(patch.model).trim() : prev.model,
     preferByok: patch.preferByok !== undefined ? Boolean(patch.preferByok) : prev.preferByok,
-    apiKey: prev.apiKey,
+    apiKey: destinationChanged ? "" : prev.apiKey,
   };
   if (patch.clearApiKey) next.apiKey = "";
   else if (patch.apiKey !== undefined && String(patch.apiKey).trim() !== "") {
@@ -76,6 +134,5 @@ export function mergeAiConfig(
   } else {
     next.provider = p;
   }
-  if (next.baseUrl.endsWith("/")) next.baseUrl = next.baseUrl.replace(/\/+$/, "");
   return next;
 }
